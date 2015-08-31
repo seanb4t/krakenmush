@@ -35,6 +35,10 @@ object TCPServer extends NamedActor {
 
   def props(config: Config): Props = Props(new TCPServer(config))
 
+}
+
+object TCPServerProtocol {
+
   case object Start
 
   case object Starting
@@ -49,7 +53,7 @@ class TCPServer(val config: Config) extends Actor with ActorLogging {
   val listenAddress: String = config.as[String]("kraken.server.listenAddress")
   val listenPort: Int = config.as[Int]("kraken.server.listenPort")
 
-  import TCPServer._
+  import TCPServerProtocol._
   import Tcp._
   import context.system
 

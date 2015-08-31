@@ -66,6 +66,22 @@ configure(allprojects) {
         options.compilerArgs += "-parameters"
     }
 
+    compileScala {
+        scalaCompileOptions.useCompileDaemon = true
+        scalaCompileOptions.additionalParameters = [
+                "-deprecation",
+                "-explaintypes",
+                "-feature",
+                "-language:postfixOps"
+        ]
+
+    }
+
+    tasks.withType(ScalaCompile) {
+        scalaCompileOptions.useAnt = false
+    }
+
+
     test {
         systemProperty("java.awt.headless", "true")
         systemProperty("testGroups", project.properties.get("testGroups"))

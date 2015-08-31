@@ -21,12 +21,29 @@ import java.time.Instant
 import akka.actor.{ActorLogging, ActorRef, FSM}
 import com.google.inject.Inject
 import com.typesafe.config.Config
-import net.muxserver.krakenmush.server.actors.netserver.TCPServer
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings
+import net.muxserver.krakenmush.server.actors.netserver._
 import net.muxserver.krakenmush.server.support.NamedActor
 
-
+@SuppressFBWarnings(Array("ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"))
 object CoreServer extends NamedActor {
   final val name = "CoreServer"
+
+  sealed trait CoreServerState
+
+  case object Running extends CoreServerState
+
+  case object Stopped extends CoreServerState
+
+  sealed trait CoreServerData
+
+  case object Uninitialized extends CoreServerData
+
+  case class ServerInfo(startTime: Instant, stopTime: Option[Instant], currentConnections: List[Object], mainTCPServer: ActorRef) extends CoreServerData
+
+}
+
+object CoreServerProtocol {
 
   case object Start
 
@@ -42,24 +59,14 @@ object CoreServer extends NamedActor {
 
 }
 
-sealed trait CoreServerState
-
-case object Running extends CoreServerState
-
-case object Stopped extends CoreServerState
-
-sealed trait CoreServerData
-
-case object Uninitialized extends CoreServerData
-
-case class ServerInfo(startTime: Instant, stopTime: Option[Instant], currentConnections: List[Object], mainTCPServer: ActorRef) extends CoreServerData
 
 /**
  * @since 8/30/15
  */
-class CoreServer @Inject()(val config: Config) extends FSM[CoreServerState, CoreServerData] with ActorLogging {
+class CoreServer @Inject()(val config: Config) extends FSM[CoreServer.CoreServerState, CoreServer.CoreServerData] with ActorLogging {
 
-  import CoreServer.{ClientConnected, Start, Starting, Stop, Stopping}
+  import CoreServer.{Running, ServerInfo, Stopped, Uninitialized}
+  import CoreServerProtocol.{ClientConnected, Start, Starting, Stop, Stopping}
 
   startWith(Stopped, Uninitialized)
 
@@ -67,7 +74,7 @@ class CoreServer @Inject()(val config: Config) extends FSM[CoreServerState, Core
     case Event(Start, Uninitialized) =>
       log.info("Starting KrakenMUSH from stopped state.")
       val tcpServer = context.actorOf(TCPServer.props(config))
-      tcpServer ! TCPServer.Start
+      tcpServer ! TCPServerProtocol.Start
       goto(Running) using ServerInfo(Instant.now, None, List(), tcpServer) replying Starting
   }
 
@@ -76,7 +83,7 @@ class CoreServer @Inject()(val config: Config) extends FSM[CoreServerState, Core
       log.info("Transitioning to running state.")
     case Running -> Stopped =>
       log.info("Transitioning to stopped state.")
-      //TODO: Stop listener here, etc
+    //TODO: Stop listener here, etc
   }
 
   when(Running) {
