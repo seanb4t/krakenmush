@@ -16,12 +16,15 @@
 
 package net.muxserver.krakenmush.actors.coreserver
 
+import java.time.Instant
+
 import akka.pattern.ask
-import akka.testkit.TestFSMRef
+import akka.testkit.{TestActorRef, TestFSMRef}
+import codes.reactive.scalatime.Scalatime._
 import net.muxserver.krakenmush.actors.BaseActorSpec
 import net.muxserver.krakenmush.server.actors.coreserver.CoreServer
 import net.muxserver.krakenmush.server.actors.coreserver.CoreServer._
-import net.muxserver.krakenmush.server.actors.coreserver.CoreServerProtocol.{Start, Starting}
+import net.muxserver.krakenmush.server.actors.coreserver.CoreServerProtocol._
 import org.junit.runner.RunWith
 import org.mockito.Matchers.{eq => eql}
 import org.scalatest.junit.JUnitRunner
@@ -31,11 +34,14 @@ import scala.util.Success
 /**
  * @since 8/30/15
  */
+//noinspection NameBooleanParameters
 @RunWith(classOf[JUnitRunner])
 class CoreServerTest extends BaseActorSpec {
 
 
-  var coreServer: TestFSMRef[_, _, _] = _
+  var coreServer = TestFSMRef(new CoreServer(config))
+  val correctTyping: TestActorRef[CoreServer] = coreServer
+
 
   "The CoreServer" must {
     "be stopped when created" in {
@@ -51,10 +57,28 @@ class CoreServerTest extends BaseActorSpec {
       coreServer.stateData must not be Uninitialized
     }
 
+    "stop when sent the Stop message when running" in {
+      coreServer.setState(Running, ServerInfo(Instant.now.minus(1L minute), None, List(), None))
+      val future = coreServer ? Stop
+      val Success(result: Any) = future.value.get
+      result must be(Stopping)
+      coreServer.stateName must be(Stopped)
+      inside(coreServer.stateData) { case ServerInfo(startTime, stopTime, _, _) =>
+        stopTime must not be None
+        stopTime.foreach(startTime.isBefore(_) must be(true))
+      }
+    }
+
+    "reply with an error when asked to Stop when already stopped" in {
+      val future = coreServer ? Stop
+      val Success(result: Error) = future.value.get
+      coreServer.stateName must be(Stopped)
+      result must matchPattern { case Error("Cannot stop already stopped server.", _) => }
+    }
+
   }
 
   override protected def beforeEach(): Unit = {
     coreServer = TestFSMRef(new CoreServer(config))
-
   }
 }

@@ -104,6 +104,10 @@ configure(allprojects) {
             name = "sonatype-oss-releases"
             url = "http://oss.sonatype.org/content/repositories/releases/"
         }
+        maven {
+            name = "sonatype-oss-snapshots"
+            url = "https://oss.sonatype.org/content/repositories/snapshots/"
+        }
     }
 
     sourceSets.all { ext.purpose = null }
@@ -127,6 +131,7 @@ configure(allprojects) {
         compile "net.ceedubs:ficus_${scalaBaseVersion}:1.1.2"
         compile "net.codingwell:scala-guice_${scalaBaseVersion}:4.0.0"
         compile 'com.google.code.findbugs:annotations:3.0.0'
+        compile "codes.reactive:scala-time_${scalaBaseVersion}:0.3.0-SNAPSHOT"
         testCompile "junit:junit:4.11"
         testCompile "org.scalatest:scalatest_${scalaBaseVersion}:2.2.5"
         testCompile "org.mockito:mockito-all:1.9.5"

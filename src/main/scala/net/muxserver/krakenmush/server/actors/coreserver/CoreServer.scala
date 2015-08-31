@@ -18,10 +18,11 @@ package net.muxserver.krakenmush.server.actors.coreserver
 
 import java.time.Instant
 
-import akka.actor.{ActorLogging, ActorRef, FSM}
+import akka.actor._
 import com.google.inject.Inject
 import com.typesafe.config.Config
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings
+import net.muxserver.krakenmush.server.actors.coreserver.CoreServerProtocol.Error
 import net.muxserver.krakenmush.server.actors.netserver._
 import net.muxserver.krakenmush.server.support.NamedActor
 
@@ -39,7 +40,7 @@ object CoreServer extends NamedActor {
 
   case object Uninitialized extends CoreServerData
 
-  case class ServerInfo(startTime: Instant, stopTime: Option[Instant], currentConnections: List[Object], mainTCPServer: ActorRef) extends CoreServerData
+  case class ServerInfo(startTime: Instant, stopTime: Option[Instant], currentConnections: List[Object], mainTCPServer: Option[ActorRef]) extends CoreServerData
 
 }
 
@@ -52,6 +53,8 @@ object CoreServerProtocol {
   case object Starting
 
   case object Stopping
+
+  case class Error(message: String, cause: Option[Any] = None)
 
   case class ClientConnected(client: Object)
 
@@ -75,15 +78,14 @@ class CoreServer @Inject()(val config: Config) extends FSM[CoreServer.CoreServer
       log.info("Starting KrakenMUSH from stopped state.")
       val tcpServer = context.actorOf(TCPServer.props(config))
       tcpServer ! TCPServerProtocol.Start
-      goto(Running) using ServerInfo(Instant.now, None, List(), tcpServer) replying Starting
+      goto(Running) using ServerInfo(Instant.now, None, List(), Some(tcpServer)) replying Starting
+    case Event(Stop, _) =>
+      stay() replying Error("Cannot stop already stopped server.")
   }
 
   onTransition {
-    case Stopped -> Running =>
-      log.info("Transitioning to running state.")
-    case Running -> Stopped =>
-      log.info("Transitioning to stopped state.")
-    //TODO: Stop listener here, etc
+    case Stopped -> Running => log.info("Transitioning to running state.")
+    case Running -> Stopped => log.info("Transitioning to stopped state.")
   }
 
   when(Running) {
@@ -92,8 +94,12 @@ class CoreServer @Inject()(val config: Config) extends FSM[CoreServer.CoreServer
       stay using ServerInfo(startTime, stopTime, connection :: currentConnections, server)
     case Event(Stop, serverInfo@ServerInfo(startTime, stopTime, currentConnections, server)) =>
       log.info("Stopping server: {}", serverInfo)
+      server.foreach {
+        _ ! TCPServerProtocol.Stop
+      }
       goto(Stopped) using ServerInfo(startTime, Some(Instant.now), currentConnections, server) replying Stopping
   }
+
 
   whenUnhandled {
     case Event(e, s) =>

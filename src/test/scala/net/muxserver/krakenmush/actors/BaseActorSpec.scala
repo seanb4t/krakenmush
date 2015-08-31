@@ -57,6 +57,7 @@ with MustMatchers
 with StopSystemAfterAll
 with MockitoSugar
 with DefaultTimeout
+with Inside
 with BeforeAndAfterEach
 with ImplicitSender {
 
