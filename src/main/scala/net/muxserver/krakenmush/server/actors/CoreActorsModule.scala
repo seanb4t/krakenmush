@@ -14,16 +14,20 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush.server
+package net.muxserver.krakenmush.server.actors
+
+import akka.actor.Actor
+import com.google.inject.AbstractModule
+import com.google.inject.name.Names
+import net.codingwell.scalaguice.ScalaModule
+import net.muxserver.krakenmush.server.actors.coreserver.CoreServer
 
 /**
- * @since 8/29/15
+ * @since 8/30/15
  */
-trait Server {
-  val listenAddress: String
-  val listenPort: Int
+class CoreActorsModule extends AbstractModule with ScalaModule {
+  def configure(): Unit = {
+    bind[Actor].annotatedWith(Names.named(CoreServer.name)).to[CoreServer]
+  }
 
-  def start(): Unit
-
-  def stop(): Unit
 }

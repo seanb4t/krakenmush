@@ -16,10 +16,14 @@
 
 package net.muxserver.krakenmush
 
+import akka.actor.ActorSystem
 import com.google.inject.Guice
 import com.typesafe.scalalogging.StrictLogging
 import net.muxserver.krakenmush.config.ConfigModule
-import net.muxserver.krakenmush.server.{AkkaModule, Server, ServerModule}
+import net.muxserver.krakenmush.server.AkkaModule
+import net.muxserver.krakenmush.server.actors.CoreActorsModule
+import net.muxserver.krakenmush.server.actors.coreserver.CoreServer
+import net.muxserver.krakenmush.server.support.GuiceAkkaExtension
 
 
 /**
@@ -30,16 +34,23 @@ object Main extends StrictLogging {
 
   def main(args: Array[String]): Unit = {
     val injector = Guice.createInjector(
-      new ConfigModule(),
+      new ConfigModule,
       new AkkaModule,
-      new ServerModule()
+      new CoreActorsModule
     )
 
     import net.codingwell.scalaguice.InjectorExtensions._
-    val server = injector.instance[Server]
-    server.start()
+    val actorSystem = injector.instance[ActorSystem]
 
-    server.stop()
+    val coreServer = actorSystem.actorOf(GuiceAkkaExtension(actorSystem).props(CoreServer.name))
 
+    coreServer ! CoreServer.Start
+
+    //    Thread.sleep(90000)
+    //
+    //    coreServer ! CoreServer.Stop
+    //
+    //    val terminationFuture = actorSystem.terminate()
+    //    Await.result(terminationFuture, 30 seconds)
   }
 }
