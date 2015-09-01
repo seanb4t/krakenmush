@@ -19,66 +19,66 @@ package net.muxserver.krakenmush.server.actors.netserver
 import java.net.InetSocketAddress
 
 import akka.actor._
-import akka.io.{IO, Tcp}
-import com.typesafe.config.Config
-import net.ceedubs.ficus.Ficus._
-import net.muxserver.krakenmush.server.actors.client.ClientHandler
-import net.muxserver.krakenmush.server.support.NamedActor
+import akka.io._
+import net.muxserver.krakenmush.server.actors.client.ClientHandlerProducer
 
 
 /**
  * @since 8/30/15
  */
 
-object TCPServer extends NamedActor {
-  final val name = "TCPServer"
-
-  def props(config: Config): Props = Props(new TCPServer(config))
-
+object TCPServer {
+  def props(listenAddress: String, listenPort: Int): Props = Props(new TCPServer(listenAddress, listenPort))
 }
 
 object TCPServerProtocol {
 
   case object Start
 
-  case object Starting
+  case object Started
 
   case object Stop
 
-  case object Stopping
+  case object Stopped
 
 }
 
-class TCPServer(val config: Config) extends Actor with ActorLogging {
-  val listenAddress: String = config.as[String]("kraken.server.listenAddress")
-  val listenPort: Int = config.as[Int]("kraken.server.listenPort")
+trait IOSupport {
+  def ioTCP()(implicit system: ActorSystem): ActorRef = IO(Tcp)
+
+  def ioUDP()(implicit system: ActorSystem): ActorRef = IO(Udp)
+}
+
+class TCPServer(listenAddress: String, listenPort: Int) extends Actor with ClientHandlerProducer with IOSupport with ActorLogging {
 
   import TCPServerProtocol._
   import Tcp._
-  import context.system
 
-  var boundAddress: Option[InetSocketAddress] = _
+  implicit val actorSystem = context.system
+
+  var boundAddress: Option[InetSocketAddress] = None
 
   def receive = {
     case Start =>
       log.info("Starting TCP server: {}:{}", listenAddress, listenPort)
-      IO(Tcp) ! Bind(self, new InetSocketAddress(listenAddress, listenPort))
-      sender ! Starting
+      ioTCP ! Bind(self, new InetSocketAddress(listenAddress, listenPort))
+      sender ! Started
     case Stop =>
       log.info("Stopping TCP server: {}:{}", listenAddress, listenPort)
-      IO(Tcp) ! Unbind
-    case b@Bound(address) =>
+      ioTCP ! Unbind
+      sender ! Stopped
+    case Bound(address) =>
       log.info("TCP Server bound, address: {}", address)
       boundAddress = Some(address)
-    case u@Unbound =>
+    case Unbound =>
       log.info("TCP Server bound, address: {}", boundAddress)
-      boundAddress = null
-    case c@Connected(localAddress, remoteAddress) =>
+      boundAddress = None
+    case Connected(localAddress, remoteAddress) =>
       log.info("Client Connected: local: {} remote: {}", localAddress, remoteAddress)
       val connection = sender()
-      val clientHandler = context.actorOf(ClientHandler.props(config, remoteAddress, connection))
+      val clientHandler = newClientHandler(remoteAddress, connection)
       connection ! Register(clientHandler)
-    case f@CommandFailed(_: Bind) => log.warning("Command Failed!: {}", f)
+    case f @ CommandFailed(_: Bind) => log.warning("Command Failed [Bind]!: {}", f)
   }
 
 }

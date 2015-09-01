@@ -31,7 +31,8 @@ object BaseActorSpec {
   val testConfig =
     """
       |akka {
-      | loglevel = "INFO"
+      | loglevel = "DEBUG"
+      | loggers = [akka.testkit.TestEventListener]
       |}
       |kraken {
       |  server {

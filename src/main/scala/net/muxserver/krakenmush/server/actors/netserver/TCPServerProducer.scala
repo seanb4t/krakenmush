@@ -14,21 +14,15 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush.server.actors
+package net.muxserver.krakenmush.server.actors.netserver
 
-import akka.actor.Actor
-import com.google.inject.AbstractModule
-import com.google.inject.name.Names
-import net.codingwell.scalaguice.ScalaModule
-import net.muxserver.krakenmush.server.actors.coreserver.CoreServer
+import akka.actor.{ActorContext, ActorRef}
 
 /**
- * @since 8/30/15
+ * @since 9/1/15
  */
-class CoreActorsModule extends AbstractModule with ScalaModule {
-  def configure(): Unit = {
-    bind[Actor].annotatedWith(Names.named(CoreServer.name)).to[CoreServer]
-
+trait TCPServerProducer {
+  def newTCPServer(listenAddress: String, listenPort: Int)(implicit context: ActorContext): ActorRef = {
+    context.actorOf(TCPServer.props(listenAddress, listenPort))
   }
-
 }

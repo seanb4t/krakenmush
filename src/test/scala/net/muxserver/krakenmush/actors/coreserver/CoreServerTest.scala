@@ -18,13 +18,15 @@ package net.muxserver.krakenmush.actors.coreserver
 
 import java.time.Instant
 
+import akka.actor.{ActorContext, ActorRef}
 import akka.pattern.ask
-import akka.testkit.{TestActorRef, TestFSMRef}
+import akka.testkit._
 import codes.reactive.scalatime.Scalatime._
 import net.muxserver.krakenmush.actors.BaseActorSpec
 import net.muxserver.krakenmush.server.actors.coreserver.CoreServer
 import net.muxserver.krakenmush.server.actors.coreserver.CoreServer._
 import net.muxserver.krakenmush.server.actors.coreserver.CoreServerProtocol._
+import net.muxserver.krakenmush.server.actors.netserver.{TCPServerProducer, TCPServerProtocol}
 import org.junit.runner.RunWith
 import org.mockito.Matchers.{eq => eql}
 import org.scalatest.junit.JUnitRunner
@@ -38,9 +40,17 @@ import scala.util.Success
 @RunWith(classOf[JUnitRunner])
 class CoreServerTest extends BaseActorSpec {
 
+  trait TestingTCPServerProducer extends TCPServerProducer {
+    var probe: TestProbe = _
 
-  var coreServer = TestFSMRef(new CoreServer(config))
-  val correctTyping: TestActorRef[CoreServer] = coreServer
+    override def newTCPServer(listenAddress: String, listenPort: Int)(implicit context: ActorContext): ActorRef = {
+      probe = TestProbe()
+      probe.ref
+    }
+  }
+
+  var coreServer = TestFSMRef(new CoreServer(config) with TestingTCPServerProducer)
+  val correctTyping: TestActorRef[CoreServer with TestingTCPServerProducer] = coreServer
 
 
   "The CoreServer" must {
@@ -55,6 +65,7 @@ class CoreServerTest extends BaseActorSpec {
       result must be(Starting)
       coreServer.stateName must be(Running)
       coreServer.stateData must not be Uninitialized
+      coreServer.underlyingActor.probe.expectMsg(TCPServerProtocol.Start)
     }
 
     "stop when sent the Stop message when running" in {
@@ -66,7 +77,7 @@ class CoreServerTest extends BaseActorSpec {
       inside(coreServer.stateData) { case ServerInfo(startTime, stopTime, _, _) =>
         stopTime must not be None
         stopTime.foreach(startTime.isBefore(_) must be(true))
-      }
+                                   }
     }
 
     "reply with an error when asked to Stop when already stopped" in {
@@ -76,9 +87,39 @@ class CoreServerTest extends BaseActorSpec {
       result must matchPattern { case Error("Cannot stop already stopped server.", _) => }
     }
 
+    "store a reference to a newly connected client" in {
+      val testProbe = TestProbe("ClientHandlerProbe")
+      coreServer.setState(Running, ServerInfo(Instant.now.minus(1L minute), None, List(), None))
+      coreServer ! ClientConnected(testProbe.ref)
+      coreServer.stateName must be(Running)
+      inside(coreServer.stateData) { case s @ ServerInfo(_, _, currentConnections, _) =>
+        currentConnections must contain(testProbe.ref)
+                                   }
+    }
+
+    "starts a TCPServer when started" in {
+      val future = coreServer ? Start
+      val Success(result: Any) = future.value.get
+      result must be(Starting)
+      coreServer.stateName must be(Running)
+      coreServer.stateData must not be Uninitialized
+      coreServer.underlyingActor.probe.expectMsg(TCPServerProtocol.Start)
+    }
+
+    "logs unhandled events and stays() in current state" in {
+      val future = coreServer ? Start
+      val Success(result: Any) = future.value.get
+      result must be(Starting)
+      coreServer.stateName must be(Running)
+      coreServer.stateData must not be Uninitialized
+      EventFilter.warning(start = "Received unhandled request: ", occurrences = 1) intercept {
+        coreServer ! "TESTEVENT"
+      }
+      coreServer.stateName must be(Running)
+    }
   }
 
   override protected def beforeEach(): Unit = {
-    coreServer = TestFSMRef(new CoreServer(config))
+    coreServer = TestFSMRef(new CoreServer(config) with TestingTCPServerProducer)
   }
 }

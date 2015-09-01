@@ -20,16 +20,15 @@ import java.net.InetSocketAddress
 
 import akka.actor._
 import akka.io.Tcp
-import com.typesafe.config.Config
 
 object ClientHandler {
-  def props(config: Config, remote: InetSocketAddress, connection: ActorRef) = Props(new ClientHandler(config, remote, connection))
+  def props(remote: InetSocketAddress, connection: ActorRef) = Props(new ClientHandler(remote, connection))
 }
 
 /**
  * @since 8/30/15
  */
-class ClientHandler(config: Config, remote: InetSocketAddress, connection: ActorRef) extends Actor with ActorLogging {
+class ClientHandler(remote: InetSocketAddress, connection: ActorRef) extends Actor with ActorLogging {
 
   import Tcp._
 
