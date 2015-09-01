@@ -1,8 +1,10 @@
 language: java
 jdk:
-  - oraclejdk8
+- oraclejdk8
 branches:
   only:
-    - master
-    - stable
-
+  - master
+  - stable
+notifications:
+  slack:
+    secure: 9w8M7V7ZJ2YIRGzVsOZU3Y6WCt9xePG1vVlSJqa0bgtO6IW7nNM/7ENVISYgQh0ol7lybgmQrhAA9+2iyBlOM/oOFHezgRBnA+UnuPLQYA0iaufrwejroFM20fqaWFM/IxevvCmeBQd8q9snoVdgPOif/dwKW3nFvmo4sCnObQ5hURAcqdjUzBVWLfokZg1h5IrdIReOBqgUDQmp3hGWsKobSkM2W8ocQcHxpbwYfZ/xPQovXWGCCNy3J4xputTfL6z6HENw/1ld2gSwRj4TjppOaoRG5ENoNa9DWwG716nOjmDesCJyZGMtKRzPxwF4ri8Ac1tTwdQ+6WxZZJjq6t6SV8/lADQaiOAD3nNdr3QbgJBx0sX6xW9oaN8YZVCty/BakvEfHml31UNW8pCL2xPx9X4ZxXaEmURmGNvlqky18YJI4FFBPmfs9bmE9ONFkfT1+tTFKWwrrwSDhjF27/vyuZS0dyloIhRz5jrXNG3CzNPze61cKKQTx+mA0XagaZt+pq3Dxf3MDmAYUeJoB8z6Xwazo1KE1dCQurhxgIeyYSs6ZjRmRHiW5xnWVEQuuE4XDph7n/3E08wMPM7uvNyUgw8BoAfrUXTJgpRt30MUv2IH27N5viG8ATLGG+PSVPRBJjL3R24E4VUBC9hZquRRC+Pf7ldOmfgi6J6IxLQ=
