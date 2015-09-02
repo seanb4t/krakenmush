@@ -33,19 +33,20 @@ class ClientHandler(remote: InetSocketAddress, connection: ActorRef) extends Act
   import Tcp._
 
   context.watch(connection)
+  var alive: Boolean = false
 
   def receive = {
-    case Received(data) =>
+    case Received(data)           =>
       val text = data.utf8String.trim
-      log.debug("data received: {}", text)
+      log.debug("Data received for client: [{}]/{}", remote, text)
       text match {
         case _ => sender ! Write(data)
       }
-    case e@PeerClosed =>
-      log.debug("peer closed, shutting down: {}", e)
+    case e @ PeerClosed           =>
+      log.info("Client closed, shutting down: [{}]/{}", remote, e)
       context.stop(self)
     case Terminated(`connection`) =>
-      log.debug("Stopping due to terminated connection.")
+      log.info("Stopping due to terminated connection.")
       context.stop(self)
   }
 }

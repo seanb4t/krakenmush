@@ -38,7 +38,7 @@ import scala.util.Success
  */
 //noinspection NameBooleanParameters
 @RunWith(classOf[JUnitRunner])
-class CoreServerTest extends BaseActorSpec {
+class CoreServerSpec extends BaseActorSpec {
 
   trait TestingTCPServerProducer extends TCPServerProducer {
     var probe: TestProbe = _
@@ -49,7 +49,8 @@ class CoreServerTest extends BaseActorSpec {
     }
   }
 
-  var coreServer = TestFSMRef(new CoreServer(config) with TestingTCPServerProducer)
+  var coreServer                                                            = TestFSMRef(new
+      CoreServer(config) with TestingTCPServerProducer)
   val correctTyping: TestActorRef[CoreServer with TestingTCPServerProducer] = coreServer
 
 
@@ -69,15 +70,21 @@ class CoreServerTest extends BaseActorSpec {
     }
 
     "stop when sent the Stop message when running" in {
-      coreServer.setState(Running, ServerInfo(Instant.now.minus(1L minute), None, List(), None))
+      val clientConnectionProbe = TestProbe()
+      val tcpServerProbe = TestProbe()
+      val serverInfo = ServerInfo(Instant.now.minus(1L minute), None, List(clientConnectionProbe.ref), Some(tcpServerProbe.ref))
+      coreServer.setState(Running, serverInfo)
       val future = coreServer ? Stop
       val Success(result: Any) = future.value.get
       result must be(Stopping)
       coreServer.stateName must be(Stopped)
-      inside(coreServer.stateData) { case ServerInfo(startTime, stopTime, _, _) =>
+      inside(coreServer.stateData) { case ServerInfo(startTime, stopTime, clientConnections, server) =>
         stopTime must not be None
         stopTime.foreach(startTime.isBefore(_) must be(true))
-                                   }
+        clientConnections must contain(clientConnectionProbe.ref)
+        server must contain(tcpServerProbe.ref)
+      }
+      tcpServerProbe.expectMsg(TCPServerProtocol.Stop)
     }
 
     "reply with an error when asked to Stop when already stopped" in {
@@ -94,7 +101,7 @@ class CoreServerTest extends BaseActorSpec {
       coreServer.stateName must be(Running)
       inside(coreServer.stateData) { case s @ ServerInfo(_, _, currentConnections, _) =>
         currentConnections must contain(testProbe.ref)
-                                   }
+      }
     }
 
     "starts a TCPServer when started" in {

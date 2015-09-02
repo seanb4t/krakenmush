@@ -46,7 +46,7 @@ object BaseActorSpec {
       |}
       |
     """.stripMargin
-  val config = ConfigFactory.parseString(testConfig)
+  val config     = ConfigFactory.parseString(testConfig)
 }
 
 /**

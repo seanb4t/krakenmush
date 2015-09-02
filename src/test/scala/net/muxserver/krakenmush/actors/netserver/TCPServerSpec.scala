@@ -16,8 +16,10 @@
 
 package net.muxserver.krakenmush.actors.netserver
 
+import java.net.InetSocketAddress
+
 import akka.actor._
-import akka.io.Tcp.{Bind, Unbind}
+import akka.io.Tcp._
 import akka.testkit._
 import net.muxserver.krakenmush.actors.BaseActorSpec
 import net.muxserver.krakenmush.server.actors.netserver.TCPServerProtocol._
@@ -35,14 +37,23 @@ class TCPServerSpec extends BaseActorSpec {
 
   trait TestingIOSupport extends IOSupport {
     var tcpProbe: TestProbe = _
+    var useProbe            = false
 
     override def ioTCP()(implicit system: ActorSystem): ActorRef = {
-      tcpProbe = TestProbe()
-      tcpProbe.ref
+      if (useProbe) {
+        tcpProbe = TestProbe()
+        tcpProbe.ref
+      } else {
+        super.ioTCP()
+      }
     }
   }
 
-  var tcpServer: TestActorRef[TCPServer with TestingIOSupport] = TestActorRef(Props(new TCPServer("0.0.0.0", 0) with TestingIOSupport))
+  var tcpServer: TestActorRef[TCPServer with TestingIOSupport] =
+    TestActorRef(Props(new TCPServer("0.0.0.0", 0) with TestingIOSupport))
+
+  var tcpServerAlreadyBoundPort: TestActorRef[TCPServer with TestingIOSupport] =
+    TestActorRef(Props(new TCPServer("0.0.0.0", 22) with TestingIOSupport))
 
   "A TCPServer" must {
     "be stopped when instantiated" in {
@@ -50,18 +61,62 @@ class TCPServerSpec extends BaseActorSpec {
     }
 
     "start when sent Start" in {
+      tcpServer.underlyingActor.useProbe = true
       EventFilter.info(start = "Starting TCP server:", occurrences = 1) intercept {
         tcpServer ! Start
-        expectMsg(Started)
         tcpServer.underlyingActor.tcpProbe
           .expectMsgPF() { case Bind(_, localAddress, _, _, _) => localAddress.getAddress.getHostAddress == "0.0.0.0" }
+        tcpServer.underlyingActor.tcpProbe.send(tcpServer, Bound(new InetSocketAddress("0.0.0.0", 0)))
+        expectMsg(BindState(true, None))
+        expectMsg(Started)
       }
     }
+
     "stop when sent Stop" in {
+      tcpServer.underlyingActor.useProbe = true
       EventFilter.info(start = "Stopping TCP server:", occurrences = 1) intercept {
+        tcpServer ! Start
+        tcpServer.underlyingActor.tcpProbe
+          .expectMsgPF() { case Bind(_, localAddress, _, _, _) => localAddress.getAddress.getHostAddress == "0.0.0.0" }
+        tcpServer.underlyingActor.tcpProbe.send(tcpServer, Bound(new InetSocketAddress("0.0.0.0", 0)))
+        expectMsg(BindState(true, None))
+        expectMsg(Started)
+
         tcpServer ! Stop
-        expectMsg(Stopped)
         tcpServer.underlyingActor.tcpProbe.expectMsg(Unbind)
+        tcpServer.underlyingActor.tcpProbe.send(tcpServer, Unbound)
+        expectMsg(BindState(false, None))
+        expectMsg(Stopped)
+      }
+    }
+
+    "receives a Bound notification when started and bound to an unused port" in {
+      tcpServer.underlyingActor.useProbe = false
+      EventFilter.info(start = "TCP Server bound, address:", occurrences = 1) intercept {
+        tcpServer ! Start
+        expectMsg(BindState(true))
+        expectMsg(Started)
+      }
+    }
+    "receives an CommandFailed : Bind notification when started and bound to an in use port" in {
+      tcpServerAlreadyBoundPort.underlyingActor.useProbe = false
+      EventFilter.error(start = "Cannot bind to requested address:port:", occurrences = 1) intercept {
+        tcpServerAlreadyBoundPort ! Start
+        expectMsgPF() {
+          case BindState(bound, errMsg) =>
+            val correctMessage = errMsg match {
+              case Some(msg) => msg.startsWith("Cannot bind to requested address:port:")
+              case _         => false
+            }
+            correctMessage && !bound
+        }
+      }
+    }
+
+    "create a ClientHandler when connected" in {
+      EventFilter.info(start = "Client Connected: local:", occurrences = 1) intercept {
+        tcpServer ! Connected(new InetSocketAddress("127.1.0.1", 3333), new InetSocketAddress("127.0.0.1", 7177))
+        expectMsgPF() { case Register(clientHandler, _, _) => clientHandler.isInstanceOf[ActorRef] }
       }
     }
   }

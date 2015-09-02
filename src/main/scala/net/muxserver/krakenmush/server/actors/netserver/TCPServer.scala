@@ -37,17 +37,14 @@ object TCPServerProtocol {
 
   case object Started
 
+  case class BindState(bound: Boolean = false, errorMsg: Option[String] = None)
+
   case object Stop
 
   case object Stopped
 
 }
 
-trait IOSupport {
-  def ioTCP()(implicit system: ActorSystem): ActorRef = IO(Tcp)
-
-  def ioUDP()(implicit system: ActorSystem): ActorRef = IO(Udp)
-}
 
 class TCPServer(listenAddress: String, listenPort: Int) extends Actor with ClientHandlerProducer with IOSupport with ActorLogging {
 
@@ -57,28 +54,37 @@ class TCPServer(listenAddress: String, listenPort: Int) extends Actor with Clien
   implicit val actorSystem = context.system
 
   var boundAddress: Option[InetSocketAddress] = None
+  private var originActor: ActorRef = _
 
   def receive = {
-    case Start =>
+    case Start                                  =>
       log.info("Starting TCP server: {}:{}", listenAddress, listenPort)
+      originActor = sender()
       ioTCP ! Bind(self, new InetSocketAddress(listenAddress, listenPort))
-      sender ! Started
-    case Stop =>
+    case Stop                                   =>
       log.info("Stopping TCP server: {}:{}", listenAddress, listenPort)
       ioTCP ! Unbind
-      sender ! Stopped
-    case Bound(address) =>
+    case Bound(address)                         =>
       log.info("TCP Server bound, address: {}", address)
       boundAddress = Some(address)
-    case Unbound =>
+      originActor ! BindState(bound = true)
+      originActor ! Started
+    case Unbound                                =>
       log.info("TCP Server bound, address: {}", boundAddress)
       boundAddress = None
+      originActor ! BindState(bound = false)
+      if (sender() != originActor) originActor ! Stopped
+      sender ! Stopped
     case Connected(localAddress, remoteAddress) =>
       log.info("Client Connected: local: {} remote: {}", localAddress, remoteAddress)
       val connection = sender()
       val clientHandler = newClientHandler(remoteAddress, connection)
       connection ! Register(clientHandler)
-    case f @ CommandFailed(_: Bind) => log.warning("Command Failed [Bind]!: {}", f)
+    case f @ CommandFailed(cmd: Bind)           =>
+      val msg = s"Cannot bind to requested address:port: ${ cmd.localAddress }"
+      log.error(msg)
+      boundAddress = None
+      originActor ! BindState(bound = false, Some(msg))
   }
 
 }

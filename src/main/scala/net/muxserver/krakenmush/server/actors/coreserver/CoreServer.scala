@@ -69,53 +69,52 @@ object CoreServerProtocol {
  * @since 8/30/15
  */
 class CoreServer @Inject()(val config: Config) extends FSM[CoreServer.CoreServerState, CoreServer.CoreServerData]
-                                                       with TCPServerProducer with ActorLogging {
+with TCPServerProducer with ActorLogging {
 
   import CoreServer.{Running, ServerInfo, Stopped, Uninitialized}
   import CoreServerProtocol.{ClientConnected, Start, Starting, Stop, Stopping}
 
   val mainServerListenAddress = config.as[String]("kraken.server.listenAddress")
-  val mainServerListenPort = config.as[Int]("kraken.server.listenPort")
+  val mainServerListenPort    = config.as[Int]("kraken.server.listenPort")
 
   startWith(Stopped, Uninitialized)
 
   when(Stopped) {
-                  case Event(Start, Uninitialized) =>
-                    log.info("Starting KrakenMUSH from stopped state.")
-                    val tcpServer = newTCPServer(mainServerListenAddress, mainServerListenPort)
-                    tcpServer ! TCPServerProtocol.Start
-                    goto(Running) using ServerInfo(Instant.now, None, List(), Some(tcpServer)) replying Starting
-                  case Event(Stop, _) =>
-                    stay() replying Error("Cannot stop already stopped server.")
-                }
+    case Event(Start, Uninitialized) =>
+      log.info("Starting KrakenMUSH from stopped state.")
+      val tcpServer = newTCPServer(mainServerListenAddress, mainServerListenPort)
+      tcpServer ! TCPServerProtocol.Start
+      goto(Running) using ServerInfo(Instant.now, None, List(), Some(tcpServer)) replying Starting
+    case Event(Stop, _)              =>
+      stay() replying Error("Cannot stop already stopped server.")
+  }
 
   onTransition {
-                 case Stopped -> Running => log.info("Transitioning to running state.")
-                 case Running -> Stopped => log.info("Transitioning to stopped state.")
-               }
+    case Stopped -> Running => log.info("Transitioning to running state.")
+    case Running -> Stopped => log.info("Transitioning to stopped state.")
+  }
 
   when(Running) {
-                  case Event(ClientConnected(client), serverInfo @ ServerInfo(startTime, stopTime, currentConnections, server)) =>
-                    log.info("Connection accepted, current connection count: {}", currentConnections.size)
-                    stay using serverInfo.copy(currentConnections = client :: currentConnections)
-                  case Event(Stop, serverInfo @ ServerInfo(startTime, stopTime, currentConnections, server)) =>
-                    log.info("Stopping server: {}", serverInfo)
-                    server.foreach {
-                                     _ ! TCPServerProtocol.Stop
-                                   }
-                    goto(Stopped) using serverInfo.copy(stopTime = Some(Instant.now)) replying Stopping
-                }
+    case Event(ClientConnected(client), serverInfo @ ServerInfo(startTime, stopTime, currentConnections, server)) =>
+      val updatedConnections = client :: currentConnections
+      log.info("Connection accepted, current connection count: {}", updatedConnections.size)
+      stay using serverInfo.copy(currentConnections = updatedConnections)
+    case Event(Stop, serverInfo @ ServerInfo(startTime, stopTime, currentConnections, server))                    =>
+      log.info("Stopping server: {}", serverInfo)
+      server.foreach { _ ! TCPServerProtocol.Stop }
+      goto(Stopped) using serverInfo.copy(stopTime = Some(Instant.now)) replying Stopping
+  }
 
 
   whenUnhandled {
-                  case Event(e, s) =>
-                    log.warning("Received unhandled request: {} in state {}/{}", e, stateName, s)
-                    stay()
-                }
+    case Event(e, s) =>
+      log.warning("Received unhandled request: {} in state {}/{}", e, stateName, s)
+      stay()
+  }
 
   onTermination {
-                  case StopEvent(reason, state, data) =>
-                    log.warning("Terminating due to {} event from state: {} with info: {}", reason, state, data)
-                }
+    case StopEvent(reason, state, data) =>
+      log.warning("Terminating due to {} event from state: {} with info: {}", reason, state, data)
+  }
 
 }

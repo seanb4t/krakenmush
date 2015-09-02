@@ -57,7 +57,7 @@ object Main extends StrictLogging {
       case Success(notice) =>
         notice match {
           case Starting => logger.info("Core Server is starting up, everything's in it's hands now.")
-          case unknown => logger.warn(s"Core Server didn't respond with a starting notice, here's what I got instead: $unknown")
+          case unknown  => logger.warn(s"Core Server didn't respond with a starting notice, here's what I got instead: $unknown")
         }
 
       case Failure(e) =>
