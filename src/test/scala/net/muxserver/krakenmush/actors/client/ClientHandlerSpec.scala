@@ -18,6 +18,7 @@ package net.muxserver.krakenmush.actors.client
 
 import java.net.InetSocketAddress
 
+import akka.io.Tcp.PeerClosed
 import akka.testkit._
 import net.muxserver.krakenmush.actors.BaseActorSpec
 import net.muxserver.krakenmush.server.actors.client.ClientHandler
@@ -27,17 +28,33 @@ import net.muxserver.krakenmush.server.actors.client.ClientHandler
  */
 class ClientHandlerSpec extends BaseActorSpec {
 
-  val clientConnectionProbe                      = TestProbe()
-  val clientHandler: TestActorRef[ClientHandler] = TestActorRef(ClientHandler
-    .props(new InetSocketAddress("127.1.1.1", 63333), clientConnectionProbe.ref))
+  var clientConnectionProbe: TestProbe                   = _
+  var clientHandler        : TestActorRef[ClientHandler] = _
+
 
   "A ClientHandler " must {
     "stop when connection terminated" in {
       EventFilter.info(message = "Stopping due to terminated connection.", occurrences = 1) intercept {
         system.stop(clientConnectionProbe.ref)
-        clientHandler
       }
     }
+
+    "stop when client closes the connection" in {
+      EventFilter.info(start = "Client closed, shutting down:", occurrences = 1) intercept {
+        clientHandler ! PeerClosed
+      }
+    }
+
+    "restricts data input to printable characters (UTF-8)" in {
+
+    }
+  }
+
+  override protected def beforeEach(): Unit = {
+    super.beforeEach()
+    clientConnectionProbe = TestProbe()
+    clientHandler = TestActorRef(ClientHandler
+      .props(new InetSocketAddress("127.1.1.1", 63333), clientConnectionProbe.ref))
 
   }
 }

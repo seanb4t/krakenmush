@@ -20,15 +20,18 @@ import java.net.InetSocketAddress
 
 import akka.actor._
 import akka.io.Tcp
+import akka.util.ByteString
+import net.muxserver.krakenmush.server.support.StringProcessingSupport
 
 object ClientHandler {
   def props(remote: InetSocketAddress, connection: ActorRef) = Props(new ClientHandler(remote, connection))
 }
 
+
 /**
  * @since 8/30/15
  */
-class ClientHandler(remote: InetSocketAddress, connection: ActorRef) extends Actor with ActorLogging {
+class ClientHandler(remote: InetSocketAddress, connection: ActorRef) extends Actor with ActorLogging with StringProcessingSupport {
 
   import Tcp._
 
@@ -37,11 +40,10 @@ class ClientHandler(remote: InetSocketAddress, connection: ActorRef) extends Act
 
   def receive = {
     case Received(data)           =>
-      val text = data.utf8String.trim
-      log.debug("Data received for client: [{}]/{}", remote, text)
-      text match {
-        case _ => sender ! Write(data)
-      }
+      val text = normalizeAndStrip(data.utf8String)
+      log.debug("Raw data from client: [{}] >: {} :<", remote, data.toArray.map(_.toInt).mkString(","))
+      log.debug("Normalized data received for client: [{}] >: {} :<", remote, text)
+      connection ! Write(ByteString(text + "\r\n"))
     case e @ PeerClosed           =>
       log.info("Client closed, shutting down: [{}]/{}", remote, e)
       context.stop(self)
@@ -49,4 +51,8 @@ class ClientHandler(remote: InetSocketAddress, connection: ActorRef) extends Act
       log.info("Stopping due to terminated connection.")
       context.stop(self)
   }
+
+
 }
+
+

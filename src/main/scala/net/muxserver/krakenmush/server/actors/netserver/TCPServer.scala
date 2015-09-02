@@ -53,6 +53,9 @@ class TCPServer(listenAddress: String, listenPort: Int) extends Actor with Clien
 
   implicit val actorSystem = context.system
 
+  // cannot restart closed connections.
+  override val supervisorStrategy = SupervisorStrategy.stoppingStrategy
+
   var boundAddress: Option[InetSocketAddress] = None
   private var originActor: ActorRef = _
 
@@ -79,12 +82,13 @@ class TCPServer(listenAddress: String, listenPort: Int) extends Actor with Clien
       log.info("Client Connected: local: {} remote: {}", localAddress, remoteAddress)
       val connection = sender()
       val clientHandler = newClientHandler(remoteAddress, connection)
-      connection ! Register(clientHandler)
-    case f @ CommandFailed(cmd: Bind)           =>
-      val msg = s"Cannot bind to requested address:port: ${ cmd.localAddress }"
+      connection ! Register(clientHandler, keepOpenOnPeerClosed = true)
+    case f @ CommandFailed(Bind(_, localAddress, _, _, _)) =>
+      val msg = s"Cannot bind to requested address:port: ${ localAddress }"
       log.error(msg)
       boundAddress = None
       originActor ! BindState(bound = false, Some(msg))
+      context stop self
   }
 
 }
