@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush.server.support
+package net.muxserver.krakenmush.server.support.guice
 
 /**
  * @since 8/29/15

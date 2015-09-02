@@ -25,7 +25,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings
 import net.ceedubs.ficus.Ficus._
 import net.muxserver.krakenmush.server.actors.coreserver.CoreServerProtocol.Error
 import net.muxserver.krakenmush.server.actors.netserver._
-import net.muxserver.krakenmush.server.support.NamedActor
+import net.muxserver.krakenmush.server.support.guice.NamedActor
 
 @SuppressFBWarnings(Array("ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"))
 object CoreServer extends NamedActor {

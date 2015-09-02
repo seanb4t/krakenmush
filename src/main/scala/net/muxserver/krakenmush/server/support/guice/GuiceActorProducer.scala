@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush.server.support
+package net.muxserver.krakenmush.server.support.guice
 
 import akka.actor.{Actor, IndirectActorProducer}
 import com.google.inject.name.Names

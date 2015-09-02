@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush.server.support
+package net.muxserver.krakenmush.server.support.guice
 
 /**
  * A convenience trait for an actor companion object to extend to provide names.

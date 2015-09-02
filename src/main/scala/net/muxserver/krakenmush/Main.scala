@@ -26,7 +26,7 @@ import net.muxserver.krakenmush.server.AkkaModule
 import net.muxserver.krakenmush.server.actors.CoreActorsModule
 import net.muxserver.krakenmush.server.actors.coreserver.CoreServer
 import net.muxserver.krakenmush.server.actors.coreserver.CoreServerProtocol.{Start, Starting}
-import net.muxserver.krakenmush.server.support.GuiceAkkaExtension
+import net.muxserver.krakenmush.server.support.guice.GuiceAkkaExtension
 
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global

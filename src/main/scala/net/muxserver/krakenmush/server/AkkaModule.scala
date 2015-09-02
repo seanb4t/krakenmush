@@ -26,7 +26,7 @@ import kamon.sigar.SigarProvisioner
 import net.ceedubs.ficus.Ficus._
 import net.codingwell.scalaguice.ScalaModule
 import net.muxserver.krakenmush.server.AkkaModule.ActorSystemProvider
-import net.muxserver.krakenmush.server.support.GuiceAkkaExtension
+import net.muxserver.krakenmush.server.support.guice.GuiceAkkaExtension
 
 
 /**

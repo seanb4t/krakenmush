@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush.server.support
+package net.muxserver.krakenmush.server.support.guice
 
 import akka.actor.{ActorRef, ActorSystem}
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings
