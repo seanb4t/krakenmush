@@ -137,6 +137,7 @@ configure(allprojects) {
         compile "net.codingwell:scala-guice_${scalaBaseVersion}:4.0.0"
         compile 'com.google.code.findbugs:annotations:3.0.0'
         compile "codes.reactive:scala-time_${scalaBaseVersion}:0.3.0-SNAPSHOT"
+        compile "org.json4s:json4s-native_${scalaBaseVersion}:3.2.11"
         testCompile "junit:junit:4.11"
         testCompile "org.scalatest:scalatest_${scalaBaseVersion}:2.2.5"
         testCompile "org.mockito:mockito-all:1.9.5"
@@ -160,6 +161,7 @@ configure(rootProject) {
 
     }
 }
+
 
 
 

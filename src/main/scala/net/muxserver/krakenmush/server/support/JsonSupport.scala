@@ -14,17 +14,23 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush.server.actors.netserver
+package net.muxserver.krakenmush.server.support
 
-import akka.actor.{ActorContext, ActorRef}
+import org.json4s.DefaultFormats
 
 /**
- * @since 9/1/15
+ * @since 9/4/15
  */
-trait TCPServerProducer {
-  def newTCPServer(listenAddress: String, listenPort: Int, commandExecutor: ActorRef, actorName: Option[String] = None)(implicit context:
-  ActorContext): ActorRef = {
-    context
-      .actorOf(TCPServer.props(listenAddress, listenPort, commandExecutor), actorName.getOrElse(s"tcpServer://$listenAddress:$listenPort"))
+object JsonSupport {
+  val formats = DefaultFormats
+
+}
+
+trait JsonToString {
+  implicit val formats = JsonSupport.formats
+
+  override def toString: String = {
+    import org.json4s.native.Serialization.write
+    write(this)
   }
 }

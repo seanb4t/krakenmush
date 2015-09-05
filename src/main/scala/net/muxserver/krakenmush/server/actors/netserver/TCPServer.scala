@@ -28,7 +28,8 @@ import net.muxserver.krakenmush.server.actors.client.ClientHandlerProducer
  */
 
 object TCPServer {
-  def props(listenAddress: String, listenPort: Int): Props = Props(new TCPServer(listenAddress, listenPort))
+  def props(listenAddress: String, listenPort: Int, commandExecutor: ActorRef): Props = Props(new
+      TCPServer(listenAddress, listenPort, commandExecutor))
 }
 
 object TCPServerProtocol {
@@ -46,7 +47,8 @@ object TCPServerProtocol {
 }
 
 
-class TCPServer(listenAddress: String, listenPort: Int) extends Actor with ClientHandlerProducer with IOSupport with ActorLogging {
+class TCPServer(listenAddress: String, listenPort: Int, commandExecutor: ActorRef)
+  extends Actor with ClientHandlerProducer with IOSupport with ActorLogging {
 
   import TCPServerProtocol._
   import Tcp._
@@ -81,7 +83,7 @@ class TCPServer(listenAddress: String, listenPort: Int) extends Actor with Clien
     case Connected(localAddress, remoteAddress) =>
       log.info("Client Connected: local: {} remote: {}", localAddress, remoteAddress)
       val connection = sender()
-      val clientHandler = newClientHandler(remoteAddress, connection)
+      val clientHandler = newClientHandler(remoteAddress, connection, commandExecutor)
       connection ! Register(clientHandler, keepOpenOnPeerClosed = true)
     case f @ CommandFailed(Bind(_, localAddress, _, _, _)) =>
       val msg = s"Cannot bind to requested address:port: ${ localAddress }"

@@ -21,29 +21,47 @@ import java.net.InetSocketAddress
 import akka.actor._
 import akka.io.Tcp
 import akka.util.ByteString
+import net.muxserver.krakenmush.server.actors.commands.CommandExecutorProtocol.{CommandExecutionResult, ExecuteRawCommand}
 import net.muxserver.krakenmush.server.support.StringProcessingSupport
 
 object ClientHandler {
-  def props(remote: InetSocketAddress, connection: ActorRef) = Props(new ClientHandler(remote, connection))
+  def props(remote: InetSocketAddress, connection: ActorRef, commandExecutor: ActorRef) = Props(new
+      ClientHandler(remote, connection, commandExecutor))
 }
 
 
 /**
  * @since 8/30/15
  */
-class ClientHandler(remote: InetSocketAddress, connection: ActorRef) extends Actor with ActorLogging with StringProcessingSupport {
+class ClientHandler(remote: InetSocketAddress, connection: ActorRef, commandExecutor: ActorRef)
+  extends Actor with ActorLogging with StringProcessingSupport {
 
   import Tcp._
 
   context.watch(connection)
-  var alive: Boolean = false
+  var alive : Boolean = false
+  val client: Client  = Client(self, remote)
 
+  /**
+   * Main receive handler.
+   * TODO: Assumes data comes in 'lines' from the client, will likely need to revisit.
+   */
   def receive = {
     case Received(data)           =>
       val text = normalizeAndStrip(data.utf8String)
       log.debug("Raw data from client: [{}] >: {} :<", remote, data.toArray.map(_.toInt).mkString(","))
       log.debug("Normalized data received for client: [{}] >: {} :<", remote, text)
+      client.update(data.length)
+      text.lines.size
+      text match {
+        case "" => log.debug("Client sent no data or all whitespace: no-op or keep alive.")
+        case s: String =>
+          commandExecutor ! ExecuteRawCommand(text)
+      }
       connection ! Write(ByteString(text + "\r\n"))
+    case CommandExecutionResult(someData, cmd) =>
+      log.debug("Sending result for command: {}", cmd)
+      connection ! Write(ByteString(someData.getOrElse("") + "\r\n"))
     case e @ PeerClosed           =>
       log.info("Client closed, shutting down: [{}]/{}", remote, e)
       context.stop(self)
@@ -51,7 +69,6 @@ class ClientHandler(remote: InetSocketAddress, connection: ActorRef) extends Act
       log.info("Stopping due to terminated connection.")
       context.stop(self)
   }
-
 
 }
 

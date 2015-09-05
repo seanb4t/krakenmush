@@ -14,17 +14,20 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush.server.actors.netserver
+package net.muxserver.krakenmush
 
-import akka.actor.{ActorContext, ActorRef}
+import org.scalatest._
+import org.scalatest.mock.MockitoSugar
+
+trait BaseRequiredSpecs extends WordSpecLike
+with MustMatchers
+with MockitoSugar
+with Inside
+with BeforeAndAfterEach
 
 /**
- * @since 9/1/15
+ * @since 9/4/15
  */
-trait TCPServerProducer {
-  def newTCPServer(listenAddress: String, listenPort: Int, commandExecutor: ActorRef, actorName: Option[String] = None)(implicit context:
-  ActorContext): ActorRef = {
-    context
-      .actorOf(TCPServer.props(listenAddress, listenPort, commandExecutor), actorName.getOrElse(s"tcpServer://$listenAddress:$listenPort"))
-  }
+class BaseSpec extends WordSpec with BaseRequiredSpecs {
+
 }

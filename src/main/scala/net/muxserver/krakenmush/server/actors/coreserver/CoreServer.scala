@@ -23,6 +23,7 @@ import com.google.inject.Inject
 import com.typesafe.config.Config
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings
 import net.ceedubs.ficus.Ficus._
+import net.muxserver.krakenmush.server.actors.commands.CommandExecutorProducer
 import net.muxserver.krakenmush.server.actors.coreserver.CoreServerProtocol.Error
 import net.muxserver.krakenmush.server.actors.netserver._
 import net.muxserver.krakenmush.server.support.guice.NamedActor
@@ -69,20 +70,28 @@ object CoreServerProtocol {
  * @since 8/30/15
  */
 class CoreServer @Inject()(val config: Config) extends FSM[CoreServer.CoreServerState, CoreServer.CoreServerData]
-with TCPServerProducer with ActorLogging {
+with TCPServerProducer
+with CommandExecutorProducer
+with ActorLogging {
 
   import CoreServer.{Running, ServerInfo, Stopped, Uninitialized}
   import CoreServerProtocol.{ClientConnected, Start, Starting, Stop, Stopping}
 
-  val mainServerListenAddress = config.as[String]("kraken.server.listenAddress")
-  val mainServerListenPort    = config.as[Int]("kraken.server.listenPort")
+  var commandExecutor: ActorRef = _
+  var tcpServer      : ActorRef = _
+  val mainServerListenAddress   = config.as[String]("kraken.server.listenAddress")
+  val mainServerListenPort      = config.as[Int]("kraken.server.listenPort")
+
+  override def preStart(): Unit = {
+    commandExecutor = newCommandExecutor()
+    tcpServer = newTCPServer(mainServerListenAddress, mainServerListenPort, commandExecutor, Some("TcpServer:Main"))
+  }
 
   startWith(Stopped, Uninitialized)
 
   when(Stopped) {
     case Event(Start, Uninitialized) =>
       log.info("Starting KrakenMUSH from stopped state.")
-      val tcpServer = newTCPServer(mainServerListenAddress, mainServerListenPort)
       tcpServer ! TCPServerProtocol.Start
       goto(Running) using ServerInfo(Instant.now, None, List(), Some(tcpServer)) replying Starting
     case Event(Stop, _)              =>

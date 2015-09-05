@@ -22,9 +22,8 @@ import akka.actor.ActorSystem
 import akka.testkit._
 import com.typesafe.config.{Config, ConfigFactory}
 import kamon.sigar.SigarProvisioner
+import net.muxserver.krakenmush.BaseRequiredSpecs
 import org.mockito.Matchers.{eq => eql}
-import org.scalatest._
-import org.scalatest.mock.MockitoSugar
 
 object BaseActorSpec {
   SigarProvisioner.provision(new File("./build/.native"))
@@ -53,13 +52,9 @@ object BaseActorSpec {
  * @since 8/30/15
  */
 abstract class BaseActorSpec extends TestKit(ActorSystem("testsystem", BaseActorSpec.config))
-with WordSpecLike
-with MustMatchers
+with BaseRequiredSpecs
 with StopSystemAfterAll
-with MockitoSugar
 with DefaultTimeout
-with Inside
-with BeforeAndAfterEach
 with ImplicitSender {
 
   var config: Config = BaseActorSpec.config

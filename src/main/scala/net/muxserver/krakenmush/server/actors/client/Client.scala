@@ -17,21 +17,34 @@
 package net.muxserver.krakenmush.server.actors.client
 
 import java.net.InetSocketAddress
+import java.time.Instant
+import java.util.UUID
 
-import akka.actor.{ActorContext, ActorRef}
+import akka.actor.ActorRef
 
 /**
- * @since 9/1/15
+ * @since 9/2/15
  */
-trait ClientHandlerProducer {
-  def newClientHandler(
-    remoteAddress: InetSocketAddress,
-    connection: ActorRef,
-    commandExecutor: ActorRef,
-    actorName: Option[String] = None
-  )(implicit context: ActorContext): ActorRef = {
-    context
-      .actorOf(ClientHandler.props(remoteAddress, connection, commandExecutor), actorName
-        .getOrElse(s"ClientHandler-${remoteAddress.getHostName}:${remoteAddress.getPort}"))
+object Client {
+  def apply(clientHandler: ActorRef, remoteAddress: InetSocketAddress) = new Client(clientHandler, remoteAddress)
+}
+
+class Client(val clientHandler: ActorRef, val remoteAddress: InetSocketAddress) {
+
+  val id            = UUID.randomUUID().toString
+  val connectedAt   = Instant.now()
+  var lastActiveAt  = Instant.now()
+  var bytesReceived = 0L
+
+
+  def remoteIP = remoteAddress.getHostName
+
+  def remotePort = remoteAddress.getPort
+
+  def update(byteCount: Int = 0): Unit = {
+    if (byteCount > 0) {
+      lastActiveAt = Instant.now()
+      bytesReceived += byteCount
+    }
   }
 }

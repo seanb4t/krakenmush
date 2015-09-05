@@ -24,7 +24,7 @@ import java.text.Normalizer
 trait StringProcessingSupport {
 
   def normalize(input: String): String = {
-    Normalizer.normalize(input, Normalizer.Form.NFD).replaceAll("[\\p{InCombiningDiacriticalMarks}]", "")
+    Normalizer.normalize(input.trim, Normalizer.Form.NFD).replaceAll("[\\p{InCombiningDiacriticalMarks}]", "")
   }
 
   def stripNonPrintables(input: String): String = {
@@ -33,7 +33,7 @@ trait StringProcessingSupport {
   }
 
   def normalizeAndStrip(input: String): String = {
-    stripNonPrintables(normalize(input))
+    stripNonPrintables(normalize(input)).trim
   }
 
 }

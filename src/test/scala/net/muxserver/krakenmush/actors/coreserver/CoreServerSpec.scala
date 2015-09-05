@@ -43,7 +43,12 @@ class CoreServerSpec extends BaseActorSpec {
   trait TestingTCPServerProducer extends TCPServerProducer {
     var probe: TestProbe = _
 
-    override def newTCPServer(listenAddress: String, listenPort: Int)(implicit context: ActorContext): ActorRef = {
+    override def newTCPServer(
+      listenAddress: String,
+      listenPort: Int,
+      commandExecutor: ActorRef,
+      actorName: Option[String] = None
+    )(implicit context: ActorContext): ActorRef = {
       probe = TestProbe()
       probe.ref
     }
@@ -99,7 +104,7 @@ class CoreServerSpec extends BaseActorSpec {
       coreServer.setState(Running, ServerInfo(Instant.now.minus(1L minute), None, List(), None))
       coreServer ! ClientConnected(testProbe.ref)
       coreServer.stateName must be(Running)
-      inside(coreServer.stateData) { case s @ ServerInfo(_, _, currentConnections, _) =>
+      inside(coreServer.stateData) { case s@ServerInfo(_, _, currentConnections, _) =>
         currentConnections must contain(testProbe.ref)
       }
     }

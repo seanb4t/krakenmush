@@ -50,10 +50,10 @@ class TCPServerSpec extends BaseActorSpec {
   }
 
   var tcpServer: TestActorRef[TCPServer with TestingIOSupport] =
-    TestActorRef(Props(new TCPServer("0.0.0.0", 0) with TestingIOSupport))
+    TestActorRef(Props(new TCPServer("0.0.0.0", 0, TestProbe("CommandExecutor").ref) with TestingIOSupport))
 
   var tcpServerAlreadyBoundPort: TestActorRef[TCPServer with TestingIOSupport] =
-    TestActorRef(Props(new TCPServer("0.0.0.0", 22) with TestingIOSupport))
+    TestActorRef(Props(new TCPServer("0.0.0.0", 22, TestProbe("CommandExecutor").ref) with TestingIOSupport))
 
   "A TCPServer" must {
     "be stopped when instantiated" in {
