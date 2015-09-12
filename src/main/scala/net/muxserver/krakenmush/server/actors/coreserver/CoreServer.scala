@@ -20,6 +20,7 @@ import java.time.Instant
 
 import akka.actor._
 import akka.cluster.pubsub.DistributedPubSubMediator.{Publish, Put, Send}
+import com.google.inject.Inject
 import com.typesafe.config.Config
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings
 import net.ceedubs.ficus.Ficus._
@@ -28,13 +29,10 @@ import net.muxserver.krakenmush.server.actors.coreserver.CoreServerProtocol.{Err
 import net.muxserver.krakenmush.server.actors.netserver.TCPServerProtocol.BindState
 import net.muxserver.krakenmush.server.actors.netserver._
 import net.muxserver.krakenmush.server.{ClusterComms, CoreClusterAddresses, CoreClusterTopics}
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.context.annotation
-import org.springframework.stereotype.Component
 
 @SuppressFBWarnings(Array("ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"))
 object CoreServer {
-  val name = "CoreServer"
+  final val name = "CoreServer"
 
   sealed trait CoreServerState
 
@@ -75,9 +73,7 @@ object CoreServerProtocol {
 /**
  * @since 8/30/15
  */
-@Component("CoreServer")
-@annotation.Scope("prototype")
-class CoreServer @Autowired()(val config: Config) extends FSM[CoreServer.CoreServerState, CoreServer.CoreServerData] with ClusterComms
+class CoreServer @Inject()(val config: Config) extends FSM[CoreServer.CoreServerState, CoreServer.CoreServerData] with ClusterComms
 with TCPServerProducer
 with CommandExecutorProducer
 with ActorLogging {

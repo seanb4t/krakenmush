@@ -19,12 +19,13 @@ package net.muxserver.krakenmush
 import akka.actor.{ActorRef, ActorSystem, Inbox}
 import akka.cluster.pubsub.DistributedPubSubMediator.{Subscribe, SubscribeAck}
 import akka.util.Timeout
+import com.google.inject.Guice
 import com.typesafe.scalalogging.StrictLogging
+import net.codingwell.scalaguice.InjectorExtensions._
 import net.muxserver.krakenmush.server.actors.coreserver.CoreServerProtocol.{Start, Started}
 import net.muxserver.krakenmush.server.actors.coreserver.{ClusterMemberListener, CoreServer}
-import net.muxserver.krakenmush.server.support.spring.SpringExtension
-import net.muxserver.krakenmush.server.{CoreClusterTopics, ServerApplicationConfiguration}
-import org.springframework.context.annotation.AnnotationConfigApplicationContext
+import net.muxserver.krakenmush.server.support.guice.GuiceAkkaExtension
+import net.muxserver.krakenmush.server.{AkkaSystemModule, ConfigModule, CoreClusterTopics, ServerModule}
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -47,13 +48,17 @@ object Main extends StrictLogging {
   }
 
   def main(args: Array[String]): Unit = {
-    implicit val ctx = new AnnotationConfigApplicationContext(classOf[ServerApplicationConfiguration])
+    implicit val injector = Guice.createInjector(
+      new ConfigModule(),
+      new AkkaSystemModule(),
+      new ServerModule
+    )
 
-    val actorSystem = ctx.getBean(classOf[ActorSystem])
+    val actorSystem = injector.instance[ActorSystem]
     val clusterMemberListener = actorSystem.actorOf(ClusterMemberListener.props())
 
     val inbox = Inbox.create(actorSystem)
-    val coreServer = actorSystem.actorOf(SpringExtension(actorSystem).props(CoreServer.name), CoreServer.name)
+    val coreServer = actorSystem.actorOf(GuiceAkkaExtension(actorSystem).props(CoreServer.name), CoreServer.name)
     logger.info("Bootstrapping CoreServer at path: {}", coreServer.path.toStringWithoutAddress)
     import akka.cluster.pubsub.DistributedPubSub
     val mediator = DistributedPubSub(actorSystem).mediator

@@ -19,6 +19,7 @@ package net.muxserver.krakenmush.server.commands
 import net.muxserver.krakenmush.server.actors.client.Client
 import net.muxserver.krakenmush.server.support.JsonToString
 
+import scala.language.implicitConversions
 import scala.util.matching.Regex
 
 /**
