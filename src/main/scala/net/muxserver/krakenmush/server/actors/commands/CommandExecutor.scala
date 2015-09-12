@@ -21,7 +21,7 @@ import akka.cluster.pubsub.DistributedPubSubMediator.Put
 import com.typesafe.config.Config
 import net.muxserver.krakenmush.server.ClusterComms
 import net.muxserver.krakenmush.server.actors.commands.CommandExecutorProtocol._
-import net.muxserver.krakenmush.server.commands.{Command, CoreCommands, ParsedCommand, StandardCommandParser}
+import net.muxserver.krakenmush.server.commands._
 
 object CommandExecutor {
   def name = "CommandExecutor"
@@ -31,17 +31,24 @@ object CommandExecutor {
 
 object CommandExecutorProtocol {
 
-  sealed trait CommandExecutorOperation
+  sealed trait CommandExecutorOperation {
+    def context: CommandExecutionContext
+  }
 
-  case class ExecuteRawCommand(rawCommandText: String) extends CommandExecutorOperation
+  case class ExecuteRawCommand(context: CommandExecutionContext, rawCommandText: String) extends CommandExecutorOperation
 
-  case class ExecuteParsedCommand(parsedCommand: ParsedCommand) extends CommandExecutorOperation
+  case class ExecuteParsedCommand(context: CommandExecutionContext, parsedCommand: ParsedCommand) extends CommandExecutorOperation
 
-  sealed trait CommandExecutionResult
+  sealed trait CommandExecutionResult {
+    def context: CommandExecutionContext
 
-  case class CommandSuccess(data: Option[String], originalCommand: ParsedCommand) extends CommandExecutionResult
+    def command: ParsedCommand
+  }
 
-  case class CommandFailed(originalCommand: ParsedCommand) extends CommandExecutionResult
+  case class CommandSuccess(context: CommandExecutionContext, command: ParsedCommand, data: Option[String]) extends CommandExecutionResult
+
+  case class CommandFailed(context: CommandExecutionContext, command: ParsedCommand, message: Option[String] = None)
+    extends CommandExecutionResult
 
 }
 
@@ -62,31 +69,37 @@ class CommandExecutor(val config: Config) extends Actor with ActorLogging with C
   }
 
   def receive = {
-    case ExecuteParsedCommand(cmd) =>
+    case ExecuteParsedCommand(executionContext, cmd) =>
       log.debug("Received command: {}", cmd)
-      val result = execute(cmd)
+      val result = execute(executionContext, cmd)
       log.debug("Result: {}", result)
       sender ! result
-    case ExecuteRawCommand(unparsedCommand) =>
+    case ExecuteRawCommand(executionContext, unparsedCommand) =>
       log.debug("Received unparsed command: {}", unparsedCommand)
       val cmd = StandardCommandParser.parse(unparsedCommand)
-      val result = execute(cmd)
+      val result = execute(executionContext, cmd)
       log.debug("Result: {}", result)
       sender ! result
   }
 
-  private def execute(command: ParsedCommand): CommandExecutionResult = {
+  private def execute(context: CommandExecutionContext, command: ParsedCommand): CommandExecutionResult = {
     log.debug("Command execution request: {} for {}", command, sender)
-    dispatch(command) match {
-      case Some(c: Command) => CommandSuccess(Some(s"ECHO: ${command.raw}"), command)
-      case None => CommandFailed(command)
+    dispatch(context, command) match {
+      case Some(c: Command) =>
+        val validationResult = c.validate(context, command)
+        if (validationResult.valid) {
+          CommandSuccess(context, command, c.execute(context, command).data)
+        } else {
+          CommandFailed(context, command, validationResult.message)
+        }
+      case None => CommandFailed(context, command)
     }
   }
 
-  private def dispatch(cmd: ParsedCommand): Option[Command] = {
+  private def dispatch(context: CommandExecutionContext, cmd: ParsedCommand): Option[Command] = {
     log.debug("Dispatching: {}", cmd)
     log.debug("Core command list: {}", CoreCommands.commandList)
-    CoreCommands.commandList.find(_.canHandle(cmd))
+    CoreCommands.commandList.find(_.canHandle(context, cmd))
   }
 }
 

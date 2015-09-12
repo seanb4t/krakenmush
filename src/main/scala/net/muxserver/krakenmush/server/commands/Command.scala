@@ -16,6 +16,7 @@
 
 package net.muxserver.krakenmush.server.commands
 
+import net.muxserver.krakenmush.server.actors.client.Client
 import net.muxserver.krakenmush.server.support.JsonToString
 
 import scala.util.matching.Regex
@@ -23,11 +24,17 @@ import scala.util.matching.Regex
 /**
  * @since 9/2/15
  */
+object Command {
+  implicit def booleanToValidationResult(bool: Boolean): CommandValidationResult = CommandValidationResult(bool, None)
+
+  implicit def tuple2ToValidationResult(tup: (Boolean, Option[String])): CommandValidationResult = CommandValidationResult(tup._1, tup._2)
+}
+
 trait Command extends {
 
-  val name: String
+  import Command._
 
-  var valid: Boolean = false
+  val name: String
 
   val aliases: Array[String] = Array()
 
@@ -35,21 +42,28 @@ trait Command extends {
 
   def commandPattern: Regex = s"^((?i)${(name +: aliases).map(Regex.quote).mkString("|")})".r
 
-  def canHandle(command: ParsedCommand): Boolean = {
-    command.command match {
-      case commandPattern => true
-      case _ => false
-    }
+  def canHandle(context: CommandExecutionContext, command: ParsedCommand): Boolean = {
+    commandPattern.findFirstIn(command.command).isDefined
   }
+
+  def validate(context: CommandExecutionContext, command: ParsedCommand): CommandValidationResult = { true }
+
+  def execute(context: CommandExecutionContext, command: ParsedCommand): CommandOutput
 
   override def toString: String = {
     import org.json4s.JsonDSL._
     import org.json4s.native.JsonMethods._
-    val output = ("name" -> name) ~ ("valid" -> valid) ~ ("aliases" -> aliases.toSeq) ~ ("commandParser" -> commandParser.getClass.toString)
+    val output = ("name" -> name) ~ ("aliases" -> aliases.toSeq) ~ ("commandParser" -> commandParser.getClass.toString)
     compact(render(output))
   }
+
 }
 
+sealed case class CommandExecutionContext(client: Client)
+
+sealed case class CommandOutput(data: Option[String])
+
+sealed case class CommandValidationResult(valid: Boolean, message: Option[String])
 
 case class ParsedCommand(prefix: Option[String], command: String, switch: Option[String], args: Option[String], raw: String)
   extends JsonToString
@@ -87,4 +101,5 @@ object StandardCommandParser extends CommandParser {
     }
   }
 }
+
 

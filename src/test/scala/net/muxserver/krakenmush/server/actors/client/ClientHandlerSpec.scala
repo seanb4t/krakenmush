@@ -64,7 +64,10 @@ class ClientHandlerSpec extends BaseActorSpec {
 
     "executes command when received" in {
       clientHandler ! Received(ByteString("connect Foo bar"))
-      mediatorProbe.expectMsg(Send(CoreClusterAddresses.COMMAND_EXECUTOR, ExecuteRawCommand("connect Foo bar"), localAffinity = false))
+      mediatorProbe.expectMsgPF() {
+        case Send(address, ExecuteRawCommand(_, msg), localAffinity) =>
+          CoreClusterAddresses.COMMAND_EXECUTOR == address && !localAffinity && msg == "connect Foo bar"
+      }
     }
 
     "sends command execution result to connection when received" in {
