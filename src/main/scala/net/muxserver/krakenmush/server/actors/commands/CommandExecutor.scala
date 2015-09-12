@@ -22,9 +22,6 @@ import com.typesafe.config.Config
 import net.muxserver.krakenmush.server.ClusterComms
 import net.muxserver.krakenmush.server.actors.commands.CommandExecutorProtocol._
 import net.muxserver.krakenmush.server.commands.{Command, CoreCommands, ParsedCommand, StandardCommandParser}
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.context.annotation
-import org.springframework.stereotype.Component
 
 object CommandExecutor {
   def name = "CommandExecutor"
@@ -56,9 +53,7 @@ trait CommandExecutorProducer {
 /**
  * @since 9/4/15
  */
-@Component
-@annotation.Scope("prototype")
-class CommandExecutor @Autowired()(val config: Config) extends Actor with ActorLogging with ClusterComms {
+class CommandExecutor(val config: Config) extends Actor with ActorLogging with ClusterComms {
 
 
   override def preStart() = {
