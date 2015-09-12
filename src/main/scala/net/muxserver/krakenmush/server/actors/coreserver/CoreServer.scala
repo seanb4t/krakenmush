@@ -89,6 +89,7 @@ with ActorLogging {
     , Some("mainTCPServer"))
   context.watch(mainTcpServer)
   val commandExecutor: ActorRef = newCommandExecutor(config)
+  context.watch(commandExecutor)
 
   startWith(Stopped, Uninitialized)
 
