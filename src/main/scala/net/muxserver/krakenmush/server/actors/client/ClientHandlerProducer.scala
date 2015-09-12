@@ -27,11 +27,10 @@ trait ClientHandlerProducer {
   def newClientHandler(
     remoteAddress: InetSocketAddress,
     connection: ActorRef,
-    commandExecutor: ActorRef,
     actorName: Option[String] = None
   )(implicit context: ActorContext): ActorRef = {
     context
-      .actorOf(ClientHandler.props(remoteAddress, connection, commandExecutor), actorName
+      .actorOf(ClientHandler.props(remoteAddress, connection), actorName
         .getOrElse(s"ClientHandler-${remoteAddress.getHostName}:${remoteAddress.getPort}"))
   }
 }

@@ -17,47 +17,81 @@
 package net.muxserver.krakenmush.server.actors.commands
 
 import akka.actor._
-import net.muxserver.krakenmush.server.actors.commands.CommandExecutorProtocol.{CommandExecutionResult, ExecuteParsedCommand,
-ExecuteRawCommand}
+import akka.cluster.pubsub.DistributedPubSubMediator.Put
+import com.typesafe.config.Config
+import net.muxserver.krakenmush.server.ClusterComms
+import net.muxserver.krakenmush.server.actors.commands.CommandExecutorProtocol._
+import net.muxserver.krakenmush.server.commands.{Command, CoreCommands, ParsedCommand, StandardCommandParser}
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.context.annotation
+import org.springframework.stereotype.Component
 
 object CommandExecutor {
-  def apply() = Props(new CommandExecutor())
+  def name = "CommandExecutor"
+
+  def apply(config: Config) = Props(new CommandExecutor(config))
 }
 
 object CommandExecutorProtocol {
 
   sealed trait CommandExecutorOperation
 
-  case class ExecuteRawCommand(rawCommandText: String)
+  case class ExecuteRawCommand(rawCommandText: String) extends CommandExecutorOperation
 
-  case class ExecuteParsedCommand(parsedCommand: ParsedCommand)
+  case class ExecuteParsedCommand(parsedCommand: ParsedCommand) extends CommandExecutorOperation
 
-  case class CommandExecutionResult(data: Option[String], originalCommand: ParsedCommand)
+  sealed trait CommandExecutionResult
+
+  case class CommandSuccess(data: Option[String], originalCommand: ParsedCommand) extends CommandExecutionResult
+
+  case class CommandFailed(originalCommand: ParsedCommand) extends CommandExecutionResult
 
 }
 
 trait CommandExecutorProducer {
-  def newCommandExecutor()(implicit context: ActorContext): ActorRef = context.actorOf(CommandExecutor(), "CommandExecutor")
+  def newCommandExecutor(config: Config)(implicit context: ActorContext): ActorRef = context
+    .actorOf(CommandExecutor(config), CommandExecutor.name)
 }
 
 /**
  * @since 9/4/15
  */
-class CommandExecutor extends Actor with ActorLogging {
+@Component
+@annotation.Scope("prototype")
+class CommandExecutor @Autowired()(val config: Config) extends Actor with ActorLogging with ClusterComms {
+
+
+  override def preStart() = {
+    log.info("Registering with cluster mediator: {}", self.path.toStringWithoutAddress)
+    mediator ! Put(self)
+  }
 
   def receive = {
     case ExecuteParsedCommand(cmd) =>
       log.debug("Received command: {}", cmd)
-      sender ! execute(cmd)
+      val result = execute(cmd)
+      log.debug("Result: {}", result)
+      sender ! result
     case ExecuteRawCommand(unparsedCommand) =>
       log.debug("Received unparsed command: {}", unparsedCommand)
       val cmd = StandardCommandParser.parse(unparsedCommand)
-      sender ! execute(cmd)
+      val result = execute(cmd)
+      log.debug("Result: {}", result)
+      sender ! result
   }
 
   private def execute(command: ParsedCommand): CommandExecutionResult = {
     log.debug("Command execution request: {} for {}", command, sender)
-    CommandExecutionResult(None, command)
+    dispatch(command) match {
+      case Some(c: Command) => CommandSuccess(Some(s"ECHO: ${command.raw}"), command)
+      case None => CommandFailed(command)
+    }
+  }
+
+  private def dispatch(cmd: ParsedCommand): Option[Command] = {
+    log.debug("Dispatching: {}", cmd)
+    log.debug("Core command list: {}", CoreCommands.commandList)
+    CoreCommands.commandList.find(_.canHandle(cmd))
   }
 }
 

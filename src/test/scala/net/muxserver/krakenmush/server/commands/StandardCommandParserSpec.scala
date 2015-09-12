@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush.actors.commands
+package net.muxserver.krakenmush.server.commands
 
 import net.muxserver.krakenmush.BaseSpec
-import net.muxserver.krakenmush.server.actors.commands.StandardCommandParser
 
 /**
  * @since 9/4/15

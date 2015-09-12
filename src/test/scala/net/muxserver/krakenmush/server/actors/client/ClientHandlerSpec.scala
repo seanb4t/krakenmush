@@ -14,25 +14,34 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush.actors.client
+package net.muxserver.krakenmush.server.actors.client
 
 import java.net.InetSocketAddress
 
+import akka.actor.{Actor, ActorRef}
+import akka.cluster.pubsub.DistributedPubSubMediator.Send
 import akka.io.Tcp.{PeerClosed, Received}
 import akka.testkit._
 import akka.util.ByteString
-import net.muxserver.krakenmush.actors.BaseActorSpec
-import net.muxserver.krakenmush.server.actors.client.ClientHandler
+import net.muxserver.krakenmush.server.actors.BaseActorSpec
 import net.muxserver.krakenmush.server.actors.commands.CommandExecutorProtocol.ExecuteRawCommand
+import net.muxserver.krakenmush.server.{ClusterComms, CoreClusterAddresses}
 
 /**
  * @since 9/1/15
  */
 class ClientHandlerSpec extends BaseActorSpec {
 
-  var clientConnectionProbe: TestProbe                   = _
-  var clientHandler        : TestActorRef[ClientHandler] = _
-  var commandExecutorProbe : TestProbe                   = _
+  trait TestClusterComms extends ClusterComms {
+    self: Actor =>
+    lazy     val mediatorProbe      = TestProbe("clusterMediator")
+    override val mediator: ActorRef = mediatorProbe.ref
+  }
+
+  var clientConnectionProbe: TestProbe                                         = _
+  var clientHandler        : TestActorRef[ClientHandler with TestClusterComms] = _
+  var commandExecutorProbe : TestProbe                                         = _
+  var mediatorProbe        : TestProbe                                         = _
 
   "A ClientHandler " must {
     "stop when connection terminated" in {
@@ -55,7 +64,7 @@ class ClientHandlerSpec extends BaseActorSpec {
 
     "executes command when received" in {
       clientHandler ! Received(ByteString("connect Foo bar"))
-      commandExecutorProbe.expectMsg(ExecuteRawCommand("connect Foo bar"))
+      mediatorProbe.expectMsg(Send(CoreClusterAddresses.COMMAND_EXECUTOR, ExecuteRawCommand("connect Foo bar"), localAffinity = false))
     }
 
     "sends command execution result to connection when received" in {
@@ -67,8 +76,9 @@ class ClientHandlerSpec extends BaseActorSpec {
     super.beforeEach()
     clientConnectionProbe = TestProbe()
     commandExecutorProbe = TestProbe("commandExecutor")
-    clientHandler = TestActorRef(ClientHandler
-      .props(new InetSocketAddress("127.1.1.1", 63333), clientConnectionProbe.ref, commandExecutorProbe.ref))
+    clientHandler = TestActorRef(new
+        ClientHandler(new InetSocketAddress("127.1.1.1", 63333), clientConnectionProbe.ref) with TestClusterComms)
+    mediatorProbe = clientHandler.underlyingActor.mediatorProbe
 
   }
 }

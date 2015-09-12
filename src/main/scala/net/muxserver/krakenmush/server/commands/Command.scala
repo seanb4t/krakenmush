@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush.server.actors.commands
+package net.muxserver.krakenmush.server.commands
 
 import net.muxserver.krakenmush.server.support.JsonToString
 
@@ -23,16 +23,36 @@ import scala.util.matching.Regex
 /**
  * @since 9/2/15
  */
-trait Command extends JsonToString {
+trait Command extends {
+
   val name: String
 
-  def valid: Boolean
+  var valid: Boolean = false
 
-  def canHandle(command: ParsedCommand): Boolean
+  val aliases: Array[String] = Array()
+
+  val commandParser: CommandParser = StandardCommandParser
+
+  def commandPattern: Regex = s"^((?i)${(name +: aliases).map(Regex.quote).mkString("|")})".r
+
+  def canHandle(command: ParsedCommand): Boolean = {
+    command.command match {
+      case commandPattern => true
+      case _ => false
+    }
+  }
+
+  override def toString: String = {
+    import org.json4s.JsonDSL._
+    import org.json4s.native.JsonMethods._
+    val output = ("name" -> name) ~ ("valid" -> valid) ~ ("aliases" -> aliases.toSeq) ~ ("commandParser" -> commandParser.getClass.toString)
+    compact(render(output))
+  }
 }
 
 
-case class ParsedCommand(prefix: Option[String], command: String, switch: Option[String], args: Option[String])
+case class ParsedCommand(prefix: Option[String], command: String, switch: Option[String], args: Option[String], raw: String)
+  extends JsonToString
 
 trait CommandParser {
   def parse(rawCommand: String): ParsedCommand
@@ -56,7 +76,7 @@ object StandardCommandParser extends CommandParser {
     var standardParsePattern(prefix, cmd, switch, args) = rawCommand
     if (args != null) args = args.trim
     if (switch != null) switch = switch.substring(1)
-    ParsedCommand(prefix, cmd, switch, args)
+    ParsedCommand(prefix, cmd, switch, args, rawCommand)
   }
 
   implicit def stringToOption(string: String): Option[String] = {
@@ -68,24 +88,3 @@ object StandardCommandParser extends CommandParser {
   }
 }
 
-sealed trait CoreCommand extends Command
-
-object CoreCommands {
-
-}
-
-object LoginCommand {
-
-}
-
-class LoginCommand extends CoreCommand {
-  val name         : String        = "login"
-  val aliases      : Array[String] = Array("connect", "con", "log")
-  val commandParser: CommandParser = StandardCommandParser
-  var parsed       : String        = _
-  var raw          : String        = _
-  var valid        : Boolean       = false
-
-  def canHandle(command: ParsedCommand): Boolean = { false }
-
-}

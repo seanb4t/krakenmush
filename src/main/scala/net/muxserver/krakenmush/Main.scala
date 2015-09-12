@@ -16,22 +16,18 @@
 
 package net.muxserver.krakenmush
 
-import akka.actor.ActorSystem
-import akka.pattern.ask
+import akka.actor.{ActorRef, ActorSystem, Inbox}
+import akka.cluster.pubsub.DistributedPubSubMediator.{Subscribe, SubscribeAck}
 import akka.util.Timeout
-import com.google.inject.Guice
 import com.typesafe.scalalogging.StrictLogging
-import net.muxserver.krakenmush.config.ConfigModule
-import net.muxserver.krakenmush.server.AkkaModule
-import net.muxserver.krakenmush.server.actors.CoreActorsModule
-import net.muxserver.krakenmush.server.actors.coreserver.CoreServer
-import net.muxserver.krakenmush.server.actors.coreserver.CoreServerProtocol.{Start, Starting}
-import net.muxserver.krakenmush.server.support.guice.GuiceAkkaExtension
+import net.muxserver.krakenmush.server.actors.coreserver.CoreServerProtocol.{Start, Started}
+import net.muxserver.krakenmush.server.actors.coreserver.{ClusterMemberListener, CoreServer}
+import net.muxserver.krakenmush.server.support.spring.SpringExtension
+import net.muxserver.krakenmush.server.{CoreClusterTopics, ServerApplicationConfiguration}
+import org.springframework.context.annotation.AnnotationConfigApplicationContext
 
 import scala.concurrent.Await
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
-import scala.util.{Failure, Success}
 
 
 /**
@@ -39,37 +35,47 @@ import scala.util.{Failure, Success}
  */
 object Main extends StrictLogging {
 
+  def subscribeToTopic(inbox: Inbox, mediator: ActorRef, topic: String)(implicit timeout: Timeout): Unit = {
+    val subRequest = Subscribe(topic, inbox.getRef())
+    inbox.send(mediator, subRequest)
+
+    inbox.receive(timeout.duration) match {
+      case SubscribeAck(s) => logger.info("Subscribed to topic: {}", s.topic)
+      case x: AnyRef => logger.warn("Received unknown message: {}", x)
+    }
+
+  }
+
   def main(args: Array[String]): Unit = {
-    val injector = Guice.createInjector(
-      new ConfigModule,
-      new AkkaModule,
-      new CoreActorsModule
-    )
+    implicit val ctx = new AnnotationConfigApplicationContext(classOf[ServerApplicationConfiguration])
 
-    import net.codingwell.scalaguice.InjectorExtensions._
-    val actorSystem = injector.instance[ActorSystem]
+    val actorSystem = ctx.getBean(classOf[ActorSystem])
+    val clusterMemberListener = actorSystem.actorOf(ClusterMemberListener.props())
 
-    val coreServer = actorSystem.actorOf(GuiceAkkaExtension(actorSystem).props(CoreServer.name))
+    val inbox = Inbox.create(actorSystem)
+    val coreServer = actorSystem.actorOf(SpringExtension(actorSystem).props(CoreServer.name), CoreServer.name)
+    logger.info("Bootstrapping CoreServer at path: {}", coreServer.path.toStringWithoutAddress)
+    import akka.cluster.pubsub.DistributedPubSub
+    val mediator = DistributedPubSub(actorSystem).mediator
 
     implicit val timeout = Timeout(30 seconds)
-    val startFuture = coreServer ? Start
-    startFuture onComplete {
-      case Success(notice) =>
-        notice match {
-          case Starting => logger.info("Core Server is starting up, everything's in it's hands now.")
-          case unknown  => logger.warn(s"Core Server didn't respond with a starting notice, here's what I got instead: $unknown")
-        }
 
-      case Failure(e) =>
-        logger.error("Core Server didn't respond with a starting up message, got this instead: {}", e)
+    Seq(
+      CoreClusterTopics.SERVER_STATUS,
+      CoreClusterTopics.SYSTEM_STATUS,
+      CoreClusterTopics.CONNECTION_INFO
+    ).sorted.foreach(subscribeToTopic(inbox, mediator, _))
+
+    inbox.send(coreServer, Start)
+
+    inbox.receive(timeout.duration) match {
+
+      case Started => logger.info("Core Server is starting up, everything's in it's hands now.")
+
+      case x: AnyRef =>
+        logger.warn("Unknown response to start request: {}", x)
         Await.result(actorSystem.terminate(), 30 seconds)
     }
 
-    //    Thread.sleep(90000)
-    //
-    //    coreServer ! CoreServer.Stop
-    //
-    //    val terminationFuture = actorSystem.terminate()
-    //    Await.result(terminationFuture, 30 seconds)
   }
 }

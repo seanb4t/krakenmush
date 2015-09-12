@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush.actors
+package net.muxserver.krakenmush.server.actors
 
 import akka.testkit.TestKit
 import org.scalatest.{BeforeAndAfterAll, Suite}

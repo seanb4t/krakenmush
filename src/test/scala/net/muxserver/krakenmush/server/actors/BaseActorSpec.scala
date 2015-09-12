@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush.actors
+package net.muxserver.krakenmush.server.actors
 
 import java.io.File
 
@@ -32,6 +32,31 @@ object BaseActorSpec {
       |akka {
       | loglevel = "DEBUG"
       | loggers = [akka.testkit.TestEventListener]
+      | extensions = ["akka.cluster.metrics.ClusterMetricsExtension", "akka.cluster.pubsub.DistributedPubSub"]
+      |
+      |  actor {
+      |    provider = akka.cluster.ClusterActorRefProvider
+      |
+      |    default-dispatcher {
+      |      througput = 10
+      |    }
+      |
+      |  }
+      |
+      | remote {
+      |    netty.tcp {
+      |      port = 0
+      |    }
+      |    log-remote-lifecycle-events = off
+      |
+      |  }
+      |
+      |  cluster {
+      |    seed-nodes = [
+      |      "akka.tcp://ClusterSystem@127.0.0.1:2551"
+      |    ]
+      |    metrics.enabled=off
+      |  }
       |}
       |kraken {
       |  server {

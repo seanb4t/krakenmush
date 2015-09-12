@@ -22,9 +22,7 @@ import akka.actor.{ActorContext, ActorRef}
  * @since 9/1/15
  */
 trait TCPServerProducer {
-  def newTCPServer(listenAddress: String, listenPort: Int, commandExecutor: ActorRef, actorName: Option[String] = None)(implicit context:
-  ActorContext): ActorRef = {
-    context
-      .actorOf(TCPServer.props(listenAddress, listenPort, commandExecutor), actorName.getOrElse(s"tcpServer://$listenAddress:$listenPort"))
+  def newTCPServer(listenAddress: String, listenPort: Int, actorName: Option[String] = None)(implicit context: ActorContext): ActorRef = {
+    context.actorOf(TCPServer.props(listenAddress, listenPort), actorName.getOrElse(s"tcpServer://$listenAddress:$listenPort"))
   }
 }

@@ -14,16 +14,18 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush.actors.netserver
+package net.muxserver.krakenmush.server.actors.netserver
 
 import java.net.InetSocketAddress
 
 import akka.actor._
+import akka.cluster.pubsub.DistributedPubSubMediator.{Publish, Put}
 import akka.io.Tcp._
 import akka.testkit._
-import net.muxserver.krakenmush.actors.BaseActorSpec
+import net.muxserver.krakenmush.server.CoreClusterTopics
+import net.muxserver.krakenmush.server.actors.ActorTestSupport.TestClusterComms
+import net.muxserver.krakenmush.server.actors.BaseActorSpec
 import net.muxserver.krakenmush.server.actors.netserver.TCPServerProtocol._
-import net.muxserver.krakenmush.server.actors.netserver.{IOSupport, TCPServer}
 import org.junit.runner.RunWith
 import org.mockito.Matchers.{eq => eql}
 import org.scalatest.junit.JUnitRunner
@@ -49,11 +51,22 @@ class TCPServerSpec extends BaseActorSpec {
     }
   }
 
-  var tcpServer: TestActorRef[TCPServer with TestingIOSupport] =
-    TestActorRef(Props(new TCPServer("0.0.0.0", 0, TestProbe("CommandExecutor").ref) with TestingIOSupport))
+  var tcpServer: TestActorRef[TCPServer with TestingIOSupport with TestClusterComms] = _
 
-  var tcpServerAlreadyBoundPort: TestActorRef[TCPServer with TestingIOSupport] =
-    TestActorRef(Props(new TCPServer("0.0.0.0", 22, TestProbe("CommandExecutor").ref) with TestingIOSupport))
+
+  var tcpServerAlreadyBoundPort: TestActorRef[TCPServer with TestingIOSupport with TestClusterComms] = _
+
+
+  var mediatorProbe                : TestProbe = _
+  var mediatorProbeAlreadyBoundPort: TestProbe = _
+
+  override def beforeEach: Unit = {
+    tcpServer = TestActorRef(Props(new TCPServer("0.0.0.0", 0) with TestingIOSupport with TestClusterComms))
+    mediatorProbe = tcpServer.underlyingActor.mediatorProbe
+
+    tcpServerAlreadyBoundPort = TestActorRef(Props(new TCPServer("0.0.0.0", 22) with TestingIOSupport with TestClusterComms))
+    mediatorProbeAlreadyBoundPort = tcpServerAlreadyBoundPort.underlyingActor.mediatorProbe
+  }
 
   "A TCPServer" must {
     "be stopped when instantiated" in {
@@ -63,39 +76,43 @@ class TCPServerSpec extends BaseActorSpec {
     "start when sent Start" in {
       tcpServer.underlyingActor.useProbe = true
       EventFilter.info(start = "Starting TCP server:", occurrences = 1) intercept {
+        mediatorProbe.expectMsgPF() { case Put(_) => true }
         tcpServer ! Start
         tcpServer.underlyingActor.tcpProbe
           .expectMsgPF() { case Bind(_, localAddress, _, _, _) => localAddress.getAddress.getHostAddress == "0.0.0.0" }
         tcpServer.underlyingActor.tcpProbe.send(tcpServer, Bound(new InetSocketAddress("0.0.0.0", 0)))
-        expectMsg(BindState(true, None))
-        expectMsg(Started)
+        mediatorProbe
+          .expectMsg(Publish(CoreClusterTopics.SERVER_STATUS, BindState(bound = true, Some(new InetSocketAddress("0.0.0.0", 0)))))
       }
     }
 
     "stop when sent Stop" in {
       tcpServer.underlyingActor.useProbe = true
       EventFilter.info(start = "Stopping TCP server:", occurrences = 1) intercept {
+        mediatorProbe.expectMsgPF() { case Put(_) => true }
         tcpServer ! Start
         tcpServer.underlyingActor.tcpProbe
           .expectMsgPF() { case Bind(_, localAddress, _, _, _) => localAddress.getAddress.getHostAddress == "0.0.0.0" }
         tcpServer.underlyingActor.tcpProbe.send(tcpServer, Bound(new InetSocketAddress("0.0.0.0", 0)))
-        expectMsg(BindState(true, None))
-        expectMsg(Started)
+        mediatorProbe
+          .expectMsg(Publish(CoreClusterTopics.SERVER_STATUS, BindState(bound = true, Some(new InetSocketAddress("0.0.0.0", 0)))))
 
         tcpServer ! Stop
         tcpServer.underlyingActor.tcpProbe.expectMsg(Unbind)
         tcpServer.underlyingActor.tcpProbe.send(tcpServer, Unbound)
-        expectMsg(BindState(false, None))
-        expectMsg(Stopped)
+        mediatorProbe.expectMsg(Publish(CoreClusterTopics.SERVER_STATUS, BindState(bound = false, None)))
       }
     }
 
     "receives a Bound notification when started and bound to an unused port" in {
       tcpServer.underlyingActor.useProbe = false
+
       EventFilter.info(start = "TCP Server bound, address:", occurrences = 1) intercept {
+        mediatorProbe.expectMsgPF() { case Put(_) => true }
         tcpServer ! Start
-        expectMsg(BindState(true))
-        expectMsg(Started)
+        mediatorProbe.expectMsgPF() { case Publish(topic, BindState(bound, address, None), _) =>
+          CoreClusterTopics.SERVER_STATUS == topic && address.isDefined && bound
+        }
       }
     }
     "receives an CommandFailed : Bind notification when started and bound to an in use port" in {
@@ -103,7 +120,7 @@ class TCPServerSpec extends BaseActorSpec {
       EventFilter.error(start = "Cannot bind to requested address:port:", occurrences = 1) intercept {
         tcpServerAlreadyBoundPort ! Start
         expectMsgPF() {
-          case BindState(bound, errMsg) =>
+          case BindState(bound, None, errMsg) =>
             val correctMessage = errMsg match {
               case Some(msg) => msg.startsWith("Cannot bind to requested address:port:")
               case _         => false

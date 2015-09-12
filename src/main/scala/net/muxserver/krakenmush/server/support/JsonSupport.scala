@@ -16,18 +16,18 @@
 
 package net.muxserver.krakenmush.server.support
 
-import org.json4s.DefaultFormats
+import org.json4s.{DefaultFormats, Formats}
 
 /**
  * @since 9/4/15
  */
 object JsonSupport {
-  val formats = DefaultFormats
+  val formats: Formats = DefaultFormats
 
 }
 
 trait JsonToString {
-  implicit val formats = JsonSupport.formats
+  implicit val formats: Formats = JsonSupport.formats
 
   override def toString: String = {
     import org.json4s.native.Serialization.write

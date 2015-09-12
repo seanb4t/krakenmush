@@ -19,22 +19,26 @@ package net.muxserver.krakenmush.server.actors.client
 import java.net.InetSocketAddress
 
 import akka.actor._
+import akka.cluster.pubsub.DistributedPubSubMediator.Send
 import akka.io.Tcp
 import akka.util.ByteString
-import net.muxserver.krakenmush.server.actors.commands.CommandExecutorProtocol.{CommandExecutionResult, ExecuteRawCommand}
+import net.muxserver.krakenmush.server.actors.commands.CommandExecutorProtocol
+import net.muxserver.krakenmush.server.actors.commands.CommandExecutorProtocol.ExecuteRawCommand
 import net.muxserver.krakenmush.server.support.StringProcessingSupport
+import net.muxserver.krakenmush.server.{ClusterComms, CoreClusterAddresses}
 
 object ClientHandler {
-  def props(remote: InetSocketAddress, connection: ActorRef, commandExecutor: ActorRef) = Props(new
-      ClientHandler(remote, connection, commandExecutor))
+  def props(remote: InetSocketAddress, connection: ActorRef) = Props(new
+      ClientHandler(remote, connection))
 }
+
 
 
 /**
  * @since 8/30/15
  */
-class ClientHandler(remote: InetSocketAddress, connection: ActorRef, commandExecutor: ActorRef)
-  extends Actor with ActorLogging with StringProcessingSupport {
+class ClientHandler(remote: InetSocketAddress, connection: ActorRef)
+  extends Actor with ActorLogging with ClusterComms with StringProcessingSupport {
 
   import Tcp._
 
@@ -52,16 +56,22 @@ class ClientHandler(remote: InetSocketAddress, connection: ActorRef, commandExec
       log.debug("Raw data from client: [{}] >: {} :<", remote, data.toArray.map(_.toInt).mkString(","))
       log.debug("Normalized data received for client: [{}] >: {} :<", remote, text)
       client.update(data.length)
-      text.lines.size
       text match {
         case "" => log.debug("Client sent no data or all whitespace: no-op or keep alive.")
         case s: String =>
-          commandExecutor ! ExecuteRawCommand(text)
+          mediator ! Send(CoreClusterAddresses.COMMAND_EXECUTOR, ExecuteRawCommand(text), localAffinity = false)
       }
-      connection ! Write(ByteString(text + "\r\n"))
-    case CommandExecutionResult(someData, cmd) =>
+    case CommandExecutorProtocol.CommandSuccess(someData, cmd) =>
       log.debug("Sending result for command: {}", cmd)
-      connection ! Write(ByteString(someData.getOrElse("") + "\r\n"))
+      val outputStr: String = someData.get match {
+        case s if s.matches( """\r\n$""") => s
+        case "" => "\r\n"
+        case s: String => s"$s\r\n"
+      }
+      connection ! Write(ByteString(outputStr))
+    case CommandExecutorProtocol.CommandFailed(originalCommand) =>
+      log.debug("Command failed: {}", originalCommand)
+      connection ! Write(ByteString(s"Huh? I don't understand what you're trying to tell me.\r\n"))
     case e @ PeerClosed           =>
       log.info("Client closed, shutting down: [{}]/{}", remote, e)
       context.stop(self)

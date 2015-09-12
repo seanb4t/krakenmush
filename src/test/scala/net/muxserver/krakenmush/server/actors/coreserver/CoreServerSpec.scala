@@ -14,19 +14,21 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush.actors.coreserver
+package net.muxserver.krakenmush.server.actors.coreserver
 
 import java.time.Instant
 
-import akka.actor.{ActorContext, ActorRef}
+import akka.actor._
+import akka.cluster.pubsub.DistributedPubSubMediator._
 import akka.pattern.ask
 import akka.testkit._
 import codes.reactive.scalatime.Scalatime._
-import net.muxserver.krakenmush.actors.BaseActorSpec
-import net.muxserver.krakenmush.server.actors.coreserver.CoreServer
+import net.muxserver.krakenmush.server.actors.ActorTestSupport.TestClusterComms
+import net.muxserver.krakenmush.server.actors.BaseActorSpec
 import net.muxserver.krakenmush.server.actors.coreserver.CoreServer._
 import net.muxserver.krakenmush.server.actors.coreserver.CoreServerProtocol._
 import net.muxserver.krakenmush.server.actors.netserver.{TCPServerProducer, TCPServerProtocol}
+import net.muxserver.krakenmush.server.{CoreClusterAddresses, CoreClusterTopics}
 import org.junit.runner.RunWith
 import org.mockito.Matchers.{eq => eql}
 import org.scalatest.junit.JUnitRunner
@@ -46,7 +48,6 @@ class CoreServerSpec extends BaseActorSpec {
     override def newTCPServer(
       listenAddress: String,
       listenPort: Int,
-      commandExecutor: ActorRef,
       actorName: Option[String] = None
     )(implicit context: ActorContext): ActorRef = {
       probe = TestProbe()
@@ -54,9 +55,12 @@ class CoreServerSpec extends BaseActorSpec {
     }
   }
 
-  var coreServer                                                            = TestFSMRef(new
-      CoreServer(config) with TestingTCPServerProducer)
-  val correctTyping: TestActorRef[CoreServer with TestingTCPServerProducer] = coreServer
+  var coreServer                                                                                   = TestFSMRef(
+    new CoreServer(config) with TestingTCPServerProducer with TestClusterComms
+  )
+  val correctTyping : TestActorRef[CoreServer with TestingTCPServerProducer with TestClusterComms] = coreServer
+  var mediatorProbe : TestProbe                                                                    = new TestProbe(system, "mediatorProbe")
+  var tcpServerProbe: TestProbe                                                                    = new TestProbe(system, "mainTcpServer")
 
 
   "The CoreServer" must {
@@ -66,30 +70,26 @@ class CoreServerSpec extends BaseActorSpec {
     }
 
     "start when sent the Start message" in {
-      val future = coreServer ? Start
-      val Success(result: Any) = future.value.get
-      result must be(Starting)
+      coreServer ! Start
+      mediatorProbe.expectMsg(Put(coreServer.actorRef))
+      mediatorProbe.expectMsg(Send(CoreClusterAddresses.TCP_SERVER_MAIN, TCPServerProtocol.Start, localAffinity = false))
+      mediatorProbe.expectMsg(Publish(CoreClusterTopics.SERVER_STATUS, Started))
       coreServer.stateName must be(Running)
       coreServer.stateData must not be Uninitialized
-      coreServer.underlyingActor.probe.expectMsg(TCPServerProtocol.Start)
     }
 
     "stop when sent the Stop message when running" in {
       val clientConnectionProbe = TestProbe()
-      val tcpServerProbe = TestProbe()
-      val serverInfo = ServerInfo(Instant.now.minus(1L minute), None, List(clientConnectionProbe.ref), Some(tcpServerProbe.ref))
+      val serverInfo = ServerInfo(Instant.now.minus(1L minute), None, List(clientConnectionProbe.ref))
       coreServer.setState(Running, serverInfo)
-      val future = coreServer ? Stop
-      val Success(result: Any) = future.value.get
-      result must be(Stopping)
+      coreServer ! Stop
+      mediatorProbe.expectMsg(Send(CoreClusterAddresses.TCP_SERVER_MAIN, TCPServerProtocol.Stop, localAffinity = false))
       coreServer.stateName must be(Stopped)
-      inside(coreServer.stateData) { case ServerInfo(startTime, stopTime, clientConnections, server) =>
+      inside(coreServer.stateData) { case ServerInfo(startTime, stopTime, clientConnections) =>
         stopTime must not be None
         stopTime.foreach(startTime.isBefore(_) must be(true))
         clientConnections must contain(clientConnectionProbe.ref)
-        server must contain(tcpServerProbe.ref)
       }
-      tcpServerProbe.expectMsg(TCPServerProtocol.Stop)
     }
 
     "reply with an error when asked to Stop when already stopped" in {
@@ -101,29 +101,27 @@ class CoreServerSpec extends BaseActorSpec {
 
     "store a reference to a newly connected client" in {
       val testProbe = TestProbe("ClientHandlerProbe")
-      coreServer.setState(Running, ServerInfo(Instant.now.minus(1L minute), None, List(), None))
+      coreServer.setState(Running, ServerInfo(Instant.now.minus(1L minute), None, List()))
       coreServer ! ClientConnected(testProbe.ref)
       coreServer.stateName must be(Running)
-      inside(coreServer.stateData) { case s@ServerInfo(_, _, currentConnections, _) =>
+      inside(coreServer.stateData) { case s@ServerInfo(_, _, currentConnections) =>
         currentConnections must contain(testProbe.ref)
       }
     }
 
     "starts a TCPServer when started" in {
-      val future = coreServer ? Start
-      val Success(result: Any) = future.value.get
-      result must be(Starting)
-      coreServer.stateName must be(Running)
-      coreServer.stateData must not be Uninitialized
-      coreServer.underlyingActor.probe.expectMsg(TCPServerProtocol.Start)
+      coreServer ! Start
+      mediatorProbe.expectMsg(Put(coreServer.actorRef))
+      mediatorProbe.expectMsg(Send(CoreClusterAddresses.TCP_SERVER_MAIN, TCPServerProtocol.Start, localAffinity = false))
+      mediatorProbe.expectMsg(Publish(CoreClusterTopics.SERVER_STATUS, Started))
+      //TODO: Finish
     }
 
     "logs unhandled events and stays() in current state" in {
-      val future = coreServer ? Start
-      val Success(result: Any) = future.value.get
-      result must be(Starting)
-      coreServer.stateName must be(Running)
-      coreServer.stateData must not be Uninitialized
+      coreServer ! Start
+      mediatorProbe.expectMsg(Put(coreServer.actorRef))
+      mediatorProbe.expectMsg(Send(CoreClusterAddresses.TCP_SERVER_MAIN, TCPServerProtocol.Start, localAffinity = false))
+      mediatorProbe.expectMsg(Publish(CoreClusterTopics.SERVER_STATUS, Started))
       EventFilter.warning(start = "Received unhandled request: ", occurrences = 1) intercept {
         coreServer ! "TESTEVENT"
       }
@@ -132,6 +130,8 @@ class CoreServerSpec extends BaseActorSpec {
   }
 
   override protected def beforeEach(): Unit = {
-    coreServer = TestFSMRef(new CoreServer(config) with TestingTCPServerProducer)
+    tcpServerProbe = new TestProbe(system, "mainTcpServer")
+    coreServer = TestFSMRef(new CoreServer(config) with TestingTCPServerProducer with TestClusterComms)
+    mediatorProbe = coreServer.underlyingActor.mediatorProbe
   }
 }

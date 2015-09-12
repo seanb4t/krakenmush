@@ -17,10 +17,13 @@
 package net.muxserver.krakenmush.server.actors.netserver
 
 import java.net.InetSocketAddress
+import java.time.Instant
 
 import akka.actor._
+import akka.cluster.pubsub.DistributedPubSubMediator.{Publish, Put}
 import akka.io._
 import net.muxserver.krakenmush.server.actors.client.ClientHandlerProducer
+import net.muxserver.krakenmush.server.{ClusterComms, CoreClusterTopics}
 
 
 /**
@@ -28,27 +31,27 @@ import net.muxserver.krakenmush.server.actors.client.ClientHandlerProducer
  */
 
 object TCPServer {
-  def props(listenAddress: String, listenPort: Int, commandExecutor: ActorRef): Props = Props(new
-      TCPServer(listenAddress, listenPort, commandExecutor))
+  def props(listenAddress: String, listenPort: Int): Props = Props(new TCPServer(listenAddress, listenPort))
 }
 
 object TCPServerProtocol {
 
-  case object Start
+  sealed trait TCPServerMessage
 
-  case object Started
+  case object Start extends TCPServerMessage
 
-  case class BindState(bound: Boolean = false, errorMsg: Option[String] = None)
+  case class BindState(bound: Boolean = false, address: Option[InetSocketAddress] = None, errorMsg: Option[String] = None)
+    extends TCPServerMessage
 
-  case object Stop
+  case object Stop extends TCPServerMessage
 
-  case object Stopped
+  case class NewConnection(remoteAddress: InetSocketAddress, connectedAt: Instant)
 
 }
 
 
-class TCPServer(listenAddress: String, listenPort: Int, commandExecutor: ActorRef)
-  extends Actor with ClientHandlerProducer with IOSupport with ActorLogging {
+class TCPServer(listenAddress: String, listenPort: Int)
+  extends Actor with ClientHandlerProducer with IOSupport with ActorLogging with ClusterComms {
 
   import TCPServerProtocol._
   import Tcp._
@@ -61,6 +64,11 @@ class TCPServer(listenAddress: String, listenPort: Int, commandExecutor: ActorRe
   var boundAddress: Option[InetSocketAddress] = None
   private var originActor: ActorRef = _
 
+  override def preStart(): Unit = {
+    log.info("Registering with cluster mediator: {}", self.path.toStringWithoutAddress)
+    mediator ! Put(self)
+  }
+
   def receive = {
     case Start                                  =>
       log.info("Starting TCP server: {}:{}", listenAddress, listenPort)
@@ -72,24 +80,22 @@ class TCPServer(listenAddress: String, listenPort: Int, commandExecutor: ActorRe
     case Bound(address)                         =>
       log.info("TCP Server bound, address: {}", address)
       boundAddress = Some(address)
-      originActor ! BindState(bound = true)
-      originActor ! Started
+      mediator ! Publish(CoreClusterTopics.SERVER_STATUS, BindState(bound = true, boundAddress))
     case Unbound                                =>
       log.info("TCP Server bound, address: {}", boundAddress)
       boundAddress = None
-      originActor ! BindState(bound = false)
-      if (sender() != originActor) originActor ! Stopped
-      sender ! Stopped
+      mediator ! Publish(CoreClusterTopics.SERVER_STATUS, BindState(bound = false))
     case Connected(localAddress, remoteAddress) =>
       log.info("Client Connected: local: {} remote: {}", localAddress, remoteAddress)
       val connection = sender()
-      val clientHandler = newClientHandler(remoteAddress, connection, commandExecutor)
+      val clientHandler = newClientHandler(remoteAddress, connection)
       connection ! Register(clientHandler, keepOpenOnPeerClosed = true)
+      mediator ! Publish(CoreClusterTopics.CONNECTION_INFO, NewConnection(remoteAddress, Instant.now()))
     case f @ CommandFailed(Bind(_, localAddress, _, _, _)) =>
       val msg = s"Cannot bind to requested address:port: ${ localAddress }"
       log.error(msg)
       boundAddress = None
-      originActor ! BindState(bound = false, Some(msg))
+      originActor ! BindState(bound = false, None, Some(msg))
       context stop self
   }
 

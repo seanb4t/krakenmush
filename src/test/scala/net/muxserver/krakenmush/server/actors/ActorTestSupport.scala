@@ -14,17 +14,28 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush.server.support.guice
+package net.muxserver.krakenmush.server.actors
 
-import akka.actor.{ActorRef, ActorSystem}
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings
+import akka.actor.{Actor, ActorRef}
+import akka.testkit.TestProbe
+import net.muxserver.krakenmush.server.ClusterComms
 
 /**
- * Mix in with Guice Modules that contain providers for top-level actor refs.
+ * @since 9/5/15
  */
-@SuppressFBWarnings(Array("NM_CLASS_NAMING_CONVENTION"))
-trait GuiceAkkaActorRefProvider {
-  def propsFor(system: ActorSystem, name: String) = GuiceAkkaExtension(system).props(name)
+object ActorTestSupport {
 
-  def provideActorRef(system: ActorSystem, name: String): ActorRef = system.actorOf(propsFor(system, name))
+  trait TestClusterComms extends ClusterComms {
+    self: Actor =>
+    lazy     val mediatorProbe      = TestProbe("clusterMediator")(context.system)
+    override val mediator: ActorRef = mediatorProbe.ref
+  }
+
+  class TestProbeWrapperActor(actorRef: ActorRef) extends Actor {
+
+    def receive = {
+      case x => actorRef forward x
+    }
+  }
+
 }
