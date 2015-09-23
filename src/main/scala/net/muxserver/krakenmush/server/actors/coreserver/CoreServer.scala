@@ -21,9 +21,8 @@ import java.time.Instant
 import akka.actor._
 import akka.cluster.pubsub.DistributedPubSubMediator.{Publish, Put, Send}
 import com.google.inject.Inject
-import com.typesafe.config.Config
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings
-import net.ceedubs.ficus.Ficus._
+import kadai.config.Configuration
 import net.muxserver.krakenmush.server.actors.commands.CommandExecutorProducer
 import net.muxserver.krakenmush.server.actors.coreserver.CoreServerProtocol.{Error, Started}
 import net.muxserver.krakenmush.server.actors.netserver.TCPServerProtocol.BindState
@@ -73,7 +72,7 @@ object CoreServerProtocol {
 /**
  * @since 8/30/15
  */
-class CoreServer @Inject()(val config: Config) extends FSM[CoreServer.CoreServerState, CoreServer.CoreServerData] with ClusterComms
+class CoreServer @Inject()(val config: Configuration) extends FSM[CoreServer.CoreServerState, CoreServer.CoreServerData] with ClusterComms
 with TCPServerProducer
 with CommandExecutorProducer
 with ActorLogging {
@@ -81,7 +80,7 @@ with ActorLogging {
   import CoreServer.{Running, ServerInfo, Stopped, Uninitialized}
   import CoreServerProtocol.{ClientConnected, Start, Stop, Stopping}
 
-  val mainTcpServer: ActorRef = newTCPServer(config.as[String]("kraken.server.listenAddress"), config.as[Int]("kraken.server.listenPort")
+  val mainTcpServer: ActorRef = newTCPServer(config[String]("kraken.server.listenAddress"), config[Int]("kraken.server.listenPort")
     , Some("mainTCPServer"))
   context.watch(mainTcpServer)
   val commandExecutor: ActorRef = newCommandExecutor(config)

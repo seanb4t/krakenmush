@@ -1,0 +1,22 @@
+---
+Configuration:
+  status: info
+  monitorInterval: 30
+
+  Appenders:
+    Console:
+      name: Console
+      target: SYSTEM_OUT
+      PatternLayout:
+        Pattern: "%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"
+
+  Loggers:
+    Logger:
+      - name: reactivemongo.core.actors
+        level: INFO
+      - name: reactivemongo.api
+        level: INFO
+    Root:
+      level: debug
+      AppenderRef:
+        ref: Console

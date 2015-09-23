@@ -14,22 +14,19 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush
+package net.muxserver.krakenmush.server.database
 
-import org.scalatest._
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.mock.MockitoSugar
-
-trait BaseRequiredSpecs extends WordSpecLike
-with MustMatchers
-with MockitoSugar
-with Inside
-with BeforeAndAfterEach
-with TryValues
+import com.google.inject.AbstractModule
+import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
+import net.muxserver.krakenmush.server.database.model.{DatabaseModelPlugin, GameMetaDataPlugin}
 
 /**
- * @since 9/4/15
+ * @since 9/16/15
  */
-class BaseSpec extends WordSpec with BaseRequiredSpecs with ScalaFutures {
-
+class DatabaseModule extends AbstractModule with ScalaModule {
+  override def configure(): Unit = {
+    val sBinder = ScalaMultibinder.newSetBinder[DatabaseModelPlugin](binder)
+    sBinder.addBinding.to[GameMetaDataPlugin]
+    bind[Database].to[Database].asEagerSingleton()
+  }
 }

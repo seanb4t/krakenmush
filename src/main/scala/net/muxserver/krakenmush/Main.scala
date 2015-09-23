@@ -35,6 +35,7 @@ import scala.concurrent.duration._
  * @since 8/29/2015
  */
 object Main extends StrictLogging {
+  System.setProperty("java.util.logging.manager", "org.apache.logging.log4j.jul.LogManager")
 
   def subscribeToTopic(inbox: Inbox, mediator: ActorRef, topic: String)(implicit timeout: Timeout): Unit = {
     val subRequest = Subscribe(topic, inbox.getRef())

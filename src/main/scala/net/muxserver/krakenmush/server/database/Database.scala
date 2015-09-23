@@ -16,21 +16,68 @@
 
 package net.muxserver.krakenmush.server.database
 
-import com.typesafe.config.Config
-import com.typesafe.scalalogging.StrictLogging
-import net.ceedubs.ficus.Ficus._
-import reactivemongo.api.{MongoConnection, MongoDriver}
+import java.util.{Set => JSet}
 
-import scala.util.Try
+import com.google.inject.Inject
+import com.typesafe.scalalogging.StrictLogging
+import kadai.config.Configuration
+import net.muxserver.krakenmush.server.database.model.{DatabaseModelPlugin, GameMetaDataPlugin}
+import reactivemongo.api.{DefaultDB, MongoConnection, MongoDriver}
+
+import scala.collection.JavaConversions._
+import scala.concurrent.{Await, Future, duration}
+import scala.language.existentials
+import scala.util.{Failure, Success, Try}
 
 /**
  * @since 9/12/15
  */
 object Database {
-  def apply(config: Config): Database = new Database(config)
+
+  import scala.concurrent.ExecutionContext.Implicits.global
+
+  implicit val executionContext = global
 }
 
-class Database(config: Config) extends StrictLogging {
-  private val driver = MongoDriver(config)
-  val connection: Try[MongoConnection] = MongoConnection.parseURI(config.as[String]("uri")).map {driver.connection}
+class Database @Inject()(config: Configuration, modelPlugins: JSet[DatabaseModelPlugin]) extends StrictLogging {
+
+  import Database.executionContext
+
+  private final val dbConfig                                         = config[Configuration]("kraken.database")
+  private final val dbDriver                                         = new MongoDriver(Option(dbConfig.toConfig))
+  final         val database      : Try[DefaultDB]                   = for {
+    uri <- MongoConnection.parseURI(dbConfig[String]("uri"))
+    conn <- Try(dbDriver.connection(uri))
+    dbName <- Try(uri.db.get)
+    db <- Try(conn.db(dbName))
+  } yield {
+      db
+    }
+  private final val modelPluginMap: Map[String, DatabaseModelPlugin] = modelPlugins.map { m => (m.modelName, m) }.toMap
+  final         val initialized                                      = Await.result(bootstrap(), duration.Duration.Inf)
+
+  def bootstrap(): Future[Boolean] = {
+    logger.warn("Bootstrapping Database!")
+    database match {
+      case Success(db) =>
+        val results: Map[String, Future[Boolean]] = modelPlugins.map { plugin => (plugin.modelName, plugin.init(db)) }.toMap
+        Future.reduce(results.values)(_ && _)
+      case Failure(ex) =>
+        logger.error("Unable to bootstrap the DB.", ex)
+        Future.failed(ex)
+    }
+  }
+
+  def meta = {
+    modelPluginMap(GameMetaDataPlugin.modelName).DAO
+  }
+
+  def rooms = {
+    ???
+  }
+
+  def characters = {
+    ???
+  }
+
 }

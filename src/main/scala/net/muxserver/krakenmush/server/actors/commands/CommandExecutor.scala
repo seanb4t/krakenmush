@@ -18,7 +18,7 @@ package net.muxserver.krakenmush.server.actors.commands
 
 import akka.actor._
 import akka.cluster.pubsub.DistributedPubSubMediator.Put
-import com.typesafe.config.Config
+import kadai.config.Configuration
 import net.muxserver.krakenmush.server.ClusterComms
 import net.muxserver.krakenmush.server.actors.commands.CommandExecutorProtocol._
 import net.muxserver.krakenmush.server.commands._
@@ -26,7 +26,7 @@ import net.muxserver.krakenmush.server.commands._
 object CommandExecutor {
   def name = "CommandExecutor"
 
-  def apply(config: Config) = Props(new CommandExecutor(config))
+  def apply(config: Configuration) = Props(new CommandExecutor(config))
 }
 
 object CommandExecutorProtocol {
@@ -53,14 +53,14 @@ object CommandExecutorProtocol {
 }
 
 trait CommandExecutorProducer {
-  def newCommandExecutor(config: Config)(implicit context: ActorContext): ActorRef = context
+  def newCommandExecutor(config: Configuration)(implicit context: ActorContext): ActorRef = context
     .actorOf(CommandExecutor(config), CommandExecutor.name)
 }
 
 /**
  * @since 9/4/15
  */
-class CommandExecutor(val config: Config) extends Actor with ActorLogging with ClusterComms {
+class CommandExecutor(val config: Configuration) extends Actor with ActorLogging with ClusterComms {
 
 
   override def preStart() = {

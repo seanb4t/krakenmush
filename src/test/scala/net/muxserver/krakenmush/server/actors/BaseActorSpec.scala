@@ -20,7 +20,7 @@ import java.io.File
 
 import akka.actor.ActorSystem
 import akka.testkit._
-import com.typesafe.config.{Config, ConfigFactory}
+import kadai.config.Configuration
 import kamon.sigar.SigarProvisioner
 import net.muxserver.krakenmush.BaseRequiredSpecs
 import org.mockito.Matchers.{eq => eql}
@@ -70,19 +70,19 @@ object BaseActorSpec {
       |}
       |
     """.stripMargin
-  val config     = ConfigFactory.parseString(testConfig)
+  val config     = Configuration.from(testConfig)
 }
 
 /**
  * @since 8/30/15
  */
-abstract class BaseActorSpec extends TestKit(ActorSystem("testsystem", BaseActorSpec.config))
+abstract class BaseActorSpec extends TestKit(ActorSystem("testsystem", BaseActorSpec.config.toConfig))
 with BaseRequiredSpecs
 with StopSystemAfterAll
 with DefaultTimeout
 with ImplicitSender {
 
-  var config: Config = BaseActorSpec.config
+  var config: Configuration = BaseActorSpec.config
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()

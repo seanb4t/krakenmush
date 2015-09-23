@@ -17,7 +17,8 @@
 package net.muxserver.krakenmush.server
 
 import com.google.inject.{AbstractModule, Provider}
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.ConfigFactory
+import kadai.config.Configuration
 import net.codingwell.scalaguice.ScalaModule
 import net.muxserver.krakenmush.server.ConfigModule.ConfigProvider
 
@@ -26,14 +27,14 @@ import net.muxserver.krakenmush.server.ConfigModule.ConfigProvider
  */
 class ConfigModule extends AbstractModule with ScalaModule {
   override def configure(): Unit = {
-    bind[Config].toProvider[ConfigProvider].asEagerSingleton()
+    bind[Configuration].toProvider[ConfigProvider].asEagerSingleton()
   }
 }
 
 object ConfigModule {
 
-  class ConfigProvider extends Provider[Config] {
-    override def get() = ConfigFactory.load()
+  class ConfigProvider extends Provider[Configuration] {
+    override def get() = Configuration(ConfigFactory.load())
   }
 
 }
