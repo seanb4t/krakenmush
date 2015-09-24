@@ -12,10 +12,12 @@ Configuration:
 
   Loggers:
     Logger:
-      - name: reactivemongo.core.actors
+      - name: org.neo4j.ogm.metadata
+        level: WARN
+      - name: org.neo4j.ogm
         level: INFO
-      - name: reactivemongo.api
-        level: INFO
+      - name: org.apache.http
+        level: WARN
     Root:
       level: debug
       AppenderRef:

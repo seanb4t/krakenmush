@@ -14,29 +14,25 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush.server.support
+package net.muxserver.krakenmush.server.database.model
 
-import org.json4s.native.JsonMethods
-import org.json4s.{DefaultFormats, Formats}
-import org.json4s._
-import org.json4s.native.JsonMethods
-import org.json4s.native.JsonMethods._
+import com.google.inject.Inject
+import kadai.config.Configuration
+import org.neo4j.ogm.session.Session
+
+import scala.concurrent.Future
 
 /**
- * @since 9/4/15
+ * @since 9/23/15
  */
-object JsonSupport {
-  val formats: Formats = DefaultFormats
+class RoomDatabaseModelPlugin @Inject() (override val config: Configuration) extends DatabaseModelPlugin(config) {
+  override type T = Room
 
-  def parse(json: String) = JsonMethods.parse(json)
+  override def init(implicit session: Session): Future[Boolean] = ???
 
+  override def packageNames: Set[String] = Set(classOf[Room].getPackage.getName)
+
+  override def modelName: String = classOf[Room].getSimpleName
 }
 
-trait JsonToString {
-  implicit val formats: Formats = JsonSupport.formats
-
-  override def toString: String = {
-    import org.json4s.native.Serialization.write
-    write(this)
-  }
-}
+class Room extends DatabaseModel

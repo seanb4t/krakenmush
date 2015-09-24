@@ -14,29 +14,20 @@
  * limitations under the License.
  */
 
-package net.muxserver.krakenmush.server.support
+package net.muxserver.krakenmush.server.support.neo4j
 
-import org.json4s.native.JsonMethods
-import org.json4s.{DefaultFormats, Formats}
-import org.json4s._
-import org.json4s.native.JsonMethods
-import org.json4s.native.JsonMethods._
+import java.time.Instant
+
+import org.neo4j.ogm.typeconversion.AttributeConverter
 
 /**
- * @since 9/4/15
+ * @since 9/22/15
  */
-object JsonSupport {
-  val formats: Formats = DefaultFormats
+object OGMConverters {
+  class InstantToLongConverter extends AttributeConverter[Instant,java.lang.Long] {
+    override def toEntityAttribute(value: java.lang.Long): Instant = Instant.ofEpochMilli(value)
 
-  def parse(json: String) = JsonMethods.parse(json)
-
-}
-
-trait JsonToString {
-  implicit val formats: Formats = JsonSupport.formats
-
-  override def toString: String = {
-    import org.json4s.native.Serialization.write
-    write(this)
+    override def toGraphProperty(value: Instant): java.lang.Long = value.toEpochMilli
   }
+
 }

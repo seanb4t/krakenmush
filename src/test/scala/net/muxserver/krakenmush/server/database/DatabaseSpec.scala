@@ -16,51 +16,33 @@
 
 package net.muxserver.krakenmush.server.database
 
-import kadai.config.Configuration
-import net.muxserver.krakenmush.BaseSpec
 import net.muxserver.krakenmush.server.database.model._
 import org.mockito.Matchers._
 import org.mockito.Mockito._
-import org.scalatest.concurrent.IntegrationPatience
-import reactivemongo.api.DefaultDB
+import org.neo4j.ogm.session.Session
 
 import scala.collection.JavaConversions._
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
 /**
  * @since 9/16/15
  */
-class DatabaseSpec extends BaseSpec with IntegrationPatience {
-  val config = Configuration.from(
-    s"""
-       |kraken {
-       | database {
-       |   uri = "mongodb://localhost:27017/krakenTestDB?authMode=scram-sha1&rm.tcpNoDelay=true&rm
-       |   .keepAlive=true&writeConcernW=1&readPreference=primaryPreferred"
-       |   mongo-async-driver {
-       |   }
-       | }
-       |}
-    """.stripMargin)
+class DatabaseSpec extends BaseDatabaseSpec {
   "The Database" must {
     "load the configuration" in {
-      val databaseModel = mock[GameMetaDataPlugin](name="DBModel1")
-      when(databaseModel.init(any[DefaultDB])).thenReturn(Future.successful(true))
+      val databaseModel = mock[GameMetaDataDatabaseModelPlugin](name="DBModel1")
+      when(databaseModel.packageNames).thenReturn(Set(classOf[GameMetaData].getPackage.getName))
+      when(databaseModel.init(any[Session])).thenReturn(Future.successful(true))
       val db = new Database(config, Set[DatabaseModelPlugin](databaseModel))
-      db.database.isSuccess must be(true)
-      verify(databaseModel).init(db.database.get)
+      db.initialized must be(true)
+      verify(databaseModel).init(any[Session])
     }
 
     "Bootstraps when there's no data" in {
-      val gameMetaDataPlugin: GameMetaDataPlugin = new GameMetaDataPlugin()
+      val gameMetaDataPlugin: GameMetaDataDatabaseModelPlugin = new GameMetaDataDatabaseModelPlugin(config)
       val db = new Database(config, Set[DatabaseModelPlugin](gameMetaDataPlugin))
-      db.database.isSuccess must be(true)
-      val futureNames = db.database.get.collectionNames
-      whenReady(futureNames) { result =>
-        result must contain(model.GameMetaDataPlugin.collectionName)
-        gameMetaDataPlugin.collection must not be null
-      }
+      db.initialized must be(true)
+      db.neo4jSession.countEntitiesOfType(classOf[GameMetaData]) must be(1)
     }
   }
 }

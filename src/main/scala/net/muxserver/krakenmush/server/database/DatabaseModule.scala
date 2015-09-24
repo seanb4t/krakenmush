@@ -18,7 +18,8 @@ package net.muxserver.krakenmush.server.database
 
 import com.google.inject.AbstractModule
 import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
-import net.muxserver.krakenmush.server.database.model.{DatabaseModelPlugin, GameMetaDataPlugin}
+import net.muxserver.krakenmush.server.database.model.{RoomDatabaseModelPlugin, PlayerDatabaseModelPlugin, DatabaseModelPlugin,
+GameMetaDataDatabaseModelPlugin}
 
 /**
  * @since 9/16/15
@@ -26,7 +27,9 @@ import net.muxserver.krakenmush.server.database.model.{DatabaseModelPlugin, Game
 class DatabaseModule extends AbstractModule with ScalaModule {
   override def configure(): Unit = {
     val sBinder = ScalaMultibinder.newSetBinder[DatabaseModelPlugin](binder)
-    sBinder.addBinding.to[GameMetaDataPlugin]
+    sBinder.addBinding.to[GameMetaDataDatabaseModelPlugin]
+    sBinder.addBinding.to[PlayerDatabaseModelPlugin]
+    sBinder.addBinding.to[RoomDatabaseModelPlugin]
     bind[Database].to[Database].asEagerSingleton()
   }
 }
