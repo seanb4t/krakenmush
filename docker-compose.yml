@@ -1,0 +1,16 @@
+db:
+  image: neo4j
+  ports:
+    - "7474:7474"
+    - "7473:7473"
+  volumes:
+    - "./tmp/neo4j:/data"
+db-test:
+  image: neo4j
+  ports:
+    - "8474:7474"
+    - "8473:7473"
+  volumes:
+    - "./tmp/test/neo4j:/data"
+redis:
+  image: redis
